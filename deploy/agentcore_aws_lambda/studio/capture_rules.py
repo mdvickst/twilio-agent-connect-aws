@@ -69,7 +69,13 @@ def main() -> int:
             print(format_problems(["Unable to read the configuration"], config), file=sys.stderr)
             return 1
 
-        payload = add_capture_rules(fetched.json(), config.twilio.phone_number)
+        try:
+            body = fetched.json()
+        except Exception:
+            print(f"Could not parse response from {configuration_id} as JSON", file=sys.stderr)
+            print(format_problems(["Unable to read the configuration"], config), file=sys.stderr)
+            return 1
+        payload = add_capture_rules(body, config.twilio.phone_number)
         written = client.put(url, json=payload)
 
     if written.status_code not in (200, 201, 204):

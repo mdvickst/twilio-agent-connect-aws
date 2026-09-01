@@ -14,6 +14,7 @@ import os
 import subprocess
 import sys
 from typing import Any
+from urllib.parse import urlparse
 
 from ivr_config import load_config
 from twilio.base.exceptions import TwilioRestException
@@ -62,16 +63,33 @@ def attach_number(client: Any, phone_number_sid: str, webhook_url: str) -> None:
     )
 
 
+def _parse_lambda_base_url(value: str) -> str | None:
+    """Return the https base URL (scheme + netloc only) for *value*, or None if invalid."""
+    parsed = urlparse(value)
+    if parsed.scheme == "https" and parsed.netloc:
+        return f"https://{parsed.netloc}"
+    return None
+
+
 def lambda_url_from_env() -> str:
     """Resolve the deployed Lambda Function URL base.
 
     Prefers IVR_LAMBDA_URL when set. Otherwise reads it from the CloudFormation
-    stack output and strips the trailing path, since the stack publishes full
-    endpoint URLs rather than the base.
+    stack output and strips any path, since the stack publishes full endpoint URLs
+    rather than the base.
+
+    Returns an absolute ``https://`` base URL with no trailing slash or path.
+    Raises ``RuntimeError`` if no usable URL can be found from any source.
     """
     explicit = os.environ.get("IVR_LAMBDA_URL")
     if explicit:
-        return explicit.rstrip("/")
+        base = _parse_lambda_base_url(explicit)
+        if base is None:
+            raise RuntimeError(
+                f"IVR_LAMBDA_URL {explicit!r} is not a valid https URL. "
+                "Set it to the Lambda Function URL base, e.g. https://abc.lambda-url.region.on.aws"
+            )
+        return base
 
     for output_key in LAMBDA_URL_OUTPUT_KEYS:
         command = [
@@ -88,8 +106,12 @@ def lambda_url_from_env() -> str:
         result = subprocess.run(command, capture_output=True, text=True, check=False)
         value = result.stdout.strip()
         if result.returncode == 0 and value and value != "None":
-            # Outputs look like https://xxx.lambda-url.region.on.aws/twiml
-            return value.rstrip("/").rsplit("/", 1)[0]
+            # Outputs look like https://xxx.lambda-url.region.on.aws/twiml — strip the path.
+            base = _parse_lambda_base_url(value)
+            if base is not None:
+                return base
+        elif result.returncode != 0 and result.stderr.strip():
+            print(f"  aws cloudformation ({output_key}): {result.stderr.strip()}", file=sys.stderr)
 
     raise RuntimeError(
         f"Could not resolve the Lambda Function URL from stack {LAMBDA_STACK_NAME}. "
@@ -152,7 +174,16 @@ def main() -> int:
     print(f"  Flow SID: {flow.sid}")
 
     print(f"Pointing {config.twilio.phone_number} at the flow...")
-    attach_number(client, config.twilio.phone_number_sid, flow.webhook_url)
+    try:
+        attach_number(client, config.twilio.phone_number_sid, flow.webhook_url)
+    except TwilioRestException as error:
+        print(
+            f"  Failed: {error.status} {error.msg}\n"
+            f"  The flow was published (SID {flow.sid}). "
+            "Set the number's Voice webhook to the flow URL manually, or re-run this script.",
+            file=sys.stderr,
+        )
+        return 1
     print("  Done.")
 
     print(

@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
 from studio.capture_rules import add_capture_rules
-from studio.provision import attach_number, find_flow_by_name, upsert_flow
+from studio.provision import attach_number, find_flow_by_name, lambda_url_from_env, upsert_flow
 
 
 class FakeFlow:
@@ -91,6 +92,7 @@ def test_upsert_updates_in_place_when_the_flow_already_exists():
     assert client.flow_list.created_with is None
     assert existing.updated_with["status"] == "published"
     assert existing.updated_with["definition"] == DEFINITION
+    assert existing.updated_with["commit_message"]
     assert flow.sid == "FW1"
 
 
@@ -151,3 +153,35 @@ def test_add_capture_rules_does_not_mutate_its_input():
     original = {"channelSettings": {"VOICE": {"captureRules": []}}}
     add_capture_rules(original, "+15550000000")
     assert original["channelSettings"]["VOICE"]["captureRules"] == []
+
+
+# ---------------------------------------------------------------------------
+# lambda_url_from_env — IVR_LAMBDA_URL branch (no subprocess needed)
+# ---------------------------------------------------------------------------
+
+
+def test_lambda_url_from_env_one_path_segment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("IVR_LAMBDA_URL", "https://abc.lambda-url.us-east-1.on.aws/twiml")
+    assert lambda_url_from_env() == "https://abc.lambda-url.us-east-1.on.aws"
+
+
+def test_lambda_url_from_env_no_path_segment(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Previously returned 'https:/' due to rsplit; now returns the correct base."""
+    monkeypatch.setenv("IVR_LAMBDA_URL", "https://abc.lambda-url.us-east-1.on.aws")
+    assert lambda_url_from_env() == "https://abc.lambda-url.us-east-1.on.aws"
+
+
+def test_lambda_url_from_env_two_path_segments(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("IVR_LAMBDA_URL", "https://abc.lambda-url.us-east-1.on.aws/twilio/voice")
+    assert lambda_url_from_env() == "https://abc.lambda-url.us-east-1.on.aws"
+
+
+def test_lambda_url_from_env_trailing_slash(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("IVR_LAMBDA_URL", "https://abc.lambda-url.us-east-1.on.aws/")
+    assert lambda_url_from_env() == "https://abc.lambda-url.us-east-1.on.aws"
+
+
+def test_lambda_url_from_env_non_url_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("IVR_LAMBDA_URL", "not a url")
+    with pytest.raises(RuntimeError):
+        lambda_url_from_env()
