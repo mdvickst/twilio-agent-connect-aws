@@ -13,7 +13,8 @@ from pathlib import Path
 
 _EXAMPLE_ROOT = Path(__file__).resolve().parents[2] / "deploy" / "agentcore_aws_lambda"
 _AGENT_DIR = _EXAMPLE_ROOT / "agent"
+_LAMBDA_DIR = _EXAMPLE_ROOT / "lambda"
 
-for _path in (_EXAMPLE_ROOT, _AGENT_DIR):
+for _path in (_EXAMPLE_ROOT, _AGENT_DIR, _LAMBDA_DIR):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
