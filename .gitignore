@@ -180,3 +180,7 @@ $RECYCLE.BIN/
 .uv/
 Makefile.local
 .claude/
+
+# AI IVR generated configuration (contains customer phone numbers and SIP credentials)
+deploy/agentcore_aws_lambda/ivr-config.json
+deploy/agentcore_aws_lambda/agent/ivr-config.json
