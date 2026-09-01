@@ -1,0 +1,164 @@
+"""Tests for the wizard HTTP API."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+from fastapi.testclient import TestClient
+from wizard.server import create_app
+
+from tests.ivr.test_ivr_config import minimal_config_dict
+
+CREDENTIALS = {
+    "accountSid": "AC" + "1" * 32,
+    "authToken": "auth-token",
+    "apiKey": "SK" + "2" * 32,
+    "apiSecret": "api-secret",
+}
+
+
+@pytest.fixture()
+def example_root(tmp_path: Path) -> Path:
+    return tmp_path
+
+
+@pytest.fixture()
+def client(example_root: Path) -> TestClient:
+    return TestClient(create_app(example_root))
+
+
+def save_payload() -> dict:
+    return {
+        "credentials": CREDENTIALS,
+        "aws": {"profile": "dev", "accountId": "123456789012", "region": "us-east-1"},
+        "config": minimal_config_dict(),
+    }
+
+
+def test_index_is_served(client: TestClient):
+    response = client.get("/")
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+
+
+def test_get_config_reports_nothing_configured_yet(client: TestClient):
+    response = client.get("/api/config")
+    assert response.status_code == 200
+    assert response.json()["config"] is None
+
+
+def test_saving_writes_both_files(client: TestClient, example_root: Path):
+    response = client.post("/api/config", json=save_payload())
+
+    assert response.status_code == 200
+    assert (example_root / "ivr-config.json").is_file()
+    assert (example_root / ".env").is_file()
+
+
+def test_saving_reports_the_next_command(client: TestClient):
+    response = client.post("/api/config", json=save_payload())
+    assert "make deploy" in response.json()["nextCommand"]
+
+
+def test_saving_puts_credentials_in_env_not_in_the_config_file(
+    client: TestClient, example_root: Path
+):
+    client.post("/api/config", json=save_payload())
+
+    config_text = (example_root / "ivr-config.json").read_text()
+    env_text = (example_root / ".env").read_text()
+
+    assert "api-secret" not in config_text
+    assert "TWILIO_API_SECRET=api-secret" in env_text
+
+
+def test_saving_generates_a_session_token(client: TestClient, example_root: Path):
+    client.post("/api/config", json=save_payload())
+    env_text = (example_root / ".env").read_text()
+
+    tokens = [
+        line.split("=", 1)[1]
+        for line in env_text.splitlines()
+        if line.startswith("IVR_SESSION_TOKEN=")
+    ]
+    assert len(tokens) == 1
+    assert len(tokens[0]) >= 32
+
+
+def test_saving_twice_keeps_the_same_session_token(client: TestClient, example_root: Path):
+    client.post("/api/config", json=save_payload())
+    first = (example_root / ".env").read_text()
+
+    client.post("/api/config", json=save_payload())
+    second = (example_root / ".env").read_text()
+
+    def token(text: str) -> str:
+        return next(line for line in text.splitlines() if line.startswith("IVR_SESSION_TOKEN="))
+
+    assert token(first) == token(second)
+
+
+def test_saving_rejects_an_invalid_config(client: TestClient, example_root: Path):
+    payload = save_payload()
+    payload["config"]["intents"] = []
+
+    response = client.post("/api/config", json=payload)
+
+    assert response.status_code == 422
+    assert not (example_root / "ivr-config.json").exists()
+
+
+def test_saving_rejects_a_duplicate_intent_key(client: TestClient):
+    payload = save_payload()
+    payload["config"]["intents"].append(dict(payload["config"]["intents"][0]))
+
+    response = client.post("/api/config", json=payload)
+
+    assert response.status_code == 422
+
+
+def test_get_config_returns_the_saved_config_with_secrets_redacted(
+    client: TestClient, example_root: Path
+):
+    client.post("/api/config", json=save_payload())
+
+    body = client.get("/api/config").json()
+
+    assert body["config"]["business"]["name"] == "Owl Insurance"
+    assert body["env"]["TWILIO_API_SECRET"] == "•••• set"
+    assert body["env"]["AWS_REGION"] == "us-east-1"
+
+
+def test_resources_endpoint_surfaces_a_credential_failure(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+):
+    def boom(credentials):
+        raise RuntimeError("Authentication failed")
+
+    monkeypatch.setattr("wizard.server.verify", boom)
+
+    response = client.post("/api/resources", json=CREDENTIALS)
+
+    assert response.status_code == 400
+    assert "Authentication failed" in response.json()["detail"]
+
+
+def test_resources_endpoint_returns_numbers_and_configurations(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr("wizard.server.verify", lambda credentials: "Test Account")
+    monkeypatch.setattr(
+        "wizard.server.list_phone_numbers",
+        lambda credentials: [{"sid": "PN1", "phoneNumber": "+15550000000", "friendlyName": "Main"}],
+    )
+    monkeypatch.setattr(
+        "wizard.server.list_conversation_configurations",
+        lambda credentials: [{"id": "WR1", "displayName": "Default"}],
+    )
+
+    body = client.post("/api/resources", json=CREDENTIALS).json()
+
+    assert body["accountName"] == "Test Account"
+    assert body["phoneNumbers"][0]["sid"] == "PN1"
+    assert body["conversationConfigurations"][0]["id"] == "WR1"
