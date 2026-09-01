@@ -117,8 +117,9 @@ def handle_session(
 
     Returns:
         A Lambda response. 200 with ``{"websocket_url": ...}`` on success; 403 on
-        a bad token, 405 on a non-POST, 400 on a malformed body, 500 if the
-        deployment has no token configured or presigning fails.
+        a bad or missing token (including an unparseable body), 405 on a non-POST,
+        400 on a missing or invalid ``CallSid`` in an authenticated request, 500 if
+        the deployment has no token configured or presigning fails.
     """
     if _request_method(event) != "POST":
         return json_response(405, {"error": "Method not allowed"})
@@ -127,12 +128,11 @@ def handle_session(
         logger.error("IVR_SESSION_TOKEN is not configured; refusing to mint session URLs")
         return json_response(500, {"error": "Server misconfigured"})
 
-    # Parse body before token comparison so malformed JSON returns 400, not 403.
+    # Authenticate before doing any work on untrusted input — this route is publicly
+    # reachable. The token lives inside the JSON body, so a body that does not parse
+    # simply cannot carry a valid token and fails authentication (returns 403, not 400).
     parsed = _parse_json_body(event)
-    if parsed is None:
-        return json_response(400, {"error": "Invalid request body"})
-
-    submitted_token = parsed.get("Token")
+    submitted_token = parsed.get("Token") if parsed is not None else ""
     if not isinstance(submitted_token, str):
         submitted_token = ""
 
@@ -140,7 +140,8 @@ def handle_session(
         logger.warning("Rejected /session request with an invalid token")
         return json_response(403, {"error": "Forbidden"})
 
-    call_sid = parsed.get("CallSid")
+    # parsed is guaranteed non-None here: compare_digest would have failed otherwise.
+    call_sid = parsed.get("CallSid")  # type: ignore[union-attr]
     if not isinstance(call_sid, str) or not call_sid:
         return json_response(400, {"error": "Missing CallSid"})
 

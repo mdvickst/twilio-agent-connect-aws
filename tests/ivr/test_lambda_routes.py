@@ -100,10 +100,12 @@ def test_session_rejects_a_missing_call_sid():
     assert response["statusCode"] == 400
 
 
-def test_session_rejects_invalid_json():
+def test_session_rejects_a_body_that_does_not_parse():
+    # The token lives inside the JSON body, so a body that cannot be parsed cannot
+    # carry a valid token. The correct response is 403 (auth failure), not 400.
     event = session_event("not json at all")
     response = handle_session(event, expected_token=TOKEN, presign=presign)
-    assert response["statusCode"] == 400
+    assert response["statusCode"] == 403
 
 
 def test_session_refuses_to_run_without_a_configured_token():
