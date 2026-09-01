@@ -1,1 +1,164 @@
-<!doctype html><title>IVR</title>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Build your AI phone agent</title>
+<link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<main>
+  <h1>Build your AI phone agent</h1>
+  <p class="lede">
+    Callers describe what they need in their own words. The agent works out which
+    department they want and transfers them there.
+  </p>
+
+  <p id="banner" class="banner" hidden role="status"></p>
+
+  <form id="ivr-form" novalidate>
+    <section>
+      <h2>1. Credentials</h2>
+      <p class="hint" id="credentials-hint">
+        Stored in <code>.env</code> on this machine only. Re-enter them on every save.
+      </p>
+      <div class="grid">
+        <label>AWS profile <input name="awsProfile" required></label>
+        <label>AWS account ID <input name="awsAccountId" required inputmode="numeric"></label>
+        <label>AWS region <input name="awsRegion" value="us-east-1" required></label>
+      </div>
+      <div class="grid">
+        <label>Twilio Account SID <input name="accountSid" required></label>
+        <label>Auth Token <input name="authToken" type="password" required></label>
+        <label>API Key SID <input name="apiKey" required></label>
+        <label>API Secret <input name="apiSecret" type="password" required></label>
+      </div>
+      <button type="button" id="test-connection">Test connection</button>
+      <p class="error" id="credentials-error" hidden></p>
+      <p class="ok" id="credentials-ok" hidden></p>
+    </section>
+
+    <section id="resources-section" class="disabled">
+      <h2>2. Phone number and conversations</h2>
+      <div class="grid">
+        <label>Phone number
+          <select name="phoneNumberSid" required></select>
+        </label>
+        <label>Conversation configuration
+          <select name="conversationConfigurationId" required></select>
+        </label>
+      </div>
+      <p class="error" id="resources-error" hidden></p>
+    </section>
+
+    <section>
+      <h2>3. Your business</h2>
+      <div class="grid">
+        <label>Name <input name="businessName" required maxlength="100"></label>
+        <label>Greeting <input name="greeting" required maxlength="500"></label>
+      </div>
+      <label>About your business
+        <textarea name="businessPrompt" rows="6" required maxlength="4000"></textarea>
+      </label>
+      <p class="counter"><span id="prompt-count">0</span>/4000</p>
+      <p class="error" id="business-error" hidden></p>
+      <div class="grid">
+        <label>Language
+          <select name="language">
+            <option value="">(Twilio default)</option>
+            <option value="en-US">en-US</option>
+            <option value="en-GB">en-GB</option>
+            <option value="es-US">es-US</option>
+            <option value="fr-FR">fr-FR</option>
+            <option value="de-DE">de-DE</option>
+          </select>
+        </label>
+        <label>Voice <input name="voice" placeholder="(Twilio default)"></label>
+      </div>
+    </section>
+
+    <section>
+      <h2>4. What callers ask for</h2>
+      <p class="hint">
+        Descriptions are what the agent routes on. Keep them specific and
+        non-overlapping.
+      </p>
+      <ul id="intent-list"></ul>
+      <button type="button" id="add-intent">+ Add intent</button>
+      <p class="error" id="intents-error" hidden></p>
+    </section>
+
+    <section>
+      <h2>5. If the agent can't tell</h2>
+      <p class="hint">Required. Every caller reaches a person rather than a dead line.</p>
+      <label>Name <input name="fallbackName" value="Operator" required maxlength="60"></label>
+      <label>When to use this
+        <input name="fallbackDescription" maxlength="200"
+               value="Anything that does not match another option, or the caller asks for a person.">
+      </label>
+      <div id="fallback-destination"></div>
+      <p class="error" id="fallback-error" hidden></p>
+    </section>
+
+    <button type="submit" id="save">Save configuration</button>
+  </form>
+
+  <section id="done" hidden>
+    <h2>Saved</h2>
+    <p>Next, run:</p>
+    <pre id="next-command"></pre>
+    <ul id="written-files"></ul>
+  </section>
+</main>
+
+<template id="destination-fields">
+  <fieldset class="destination">
+    <legend>Send to</legend>
+    <div class="radios">
+      <label><input type="radio" name="destinationType" value="phone" checked> Phone</label>
+      <label><input type="radio" name="destinationType" value="sip"> SIP</label>
+      <label><input type="radio" name="destinationType" value="client"> Client</label>
+    </div>
+    <div data-fields="phone">
+      <div class="grid">
+        <label>Number <input name="number" placeholder="+15551230001"></label>
+        <label>Extension <input name="extension" placeholder="optional"></label>
+        <label>Pause before digits (seconds)
+          <input name="extensionPauseSeconds" type="number" min="0" max="10" step="0.5" value="2">
+        </label>
+      </div>
+    </div>
+    <div data-fields="sip" hidden>
+      <label>SIP URI <input name="uri" placeholder="sip:sales@pbx.example.com"></label>
+      <label>Custom headers, one <code>X-Name: value</code> per line
+        <textarea name="headers" rows="3" placeholder="X-Dept: sales"></textarea>
+      </label>
+      <div class="grid">
+        <label>Username <input name="username" placeholder="optional"></label>
+        <label>Password <input name="password" type="password" placeholder="optional"></label>
+      </div>
+    </div>
+    <div data-fields="client" hidden>
+      <label>Client identity <input name="identity" placeholder="alice"></label>
+    </div>
+    <p class="error" data-error="destination" hidden></p>
+  </fieldset>
+</template>
+
+<template id="intent-row">
+  <li class="intent">
+    <div class="intent-head">
+      <label>Name <input name="name" maxlength="60"></label>
+      <span class="slug">key: <code data-slug>—</code></span>
+      <button type="button" class="remove" aria-label="Remove this intent">&#10005;</button>
+    </div>
+    <label>When to use this
+      <input name="description" maxlength="200">
+    </label>
+    <p class="error" data-error="row" hidden></p>
+  </li>
+</template>
+
+<script src="/static/app.js" defer></script>
+</body>
+</html>
