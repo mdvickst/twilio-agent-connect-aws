@@ -60,7 +60,24 @@ def test_every_transition_targets_a_state_that_exists():
         for transition in state["transitions"]:
             target = transition.get("next")
             if target is not None:
-                assert target in names, f"{state['name']} points at missing {target}"
+                assert target in names, (
+                    f"[phone/sip config] {state['name']} points at missing {target}"
+                )
+
+
+def test_every_transition_targets_a_state_that_exists_with_extensions():
+    raw = minimal_config_dict()
+    raw["intents"][0]["destination"]["extension"] = "402"
+    config = IVRConfig.model_validate(raw)
+    definition = build(config)
+    names = set(states_by_name(definition))
+    for state in definition["states"]:
+        for transition in state["transitions"]:
+            target = transition.get("next")
+            if target is not None:
+                assert target in names, (
+                    f"[extension config] {state['name']} points at missing {target}"
+                )
 
 
 def test_state_names_are_unique():

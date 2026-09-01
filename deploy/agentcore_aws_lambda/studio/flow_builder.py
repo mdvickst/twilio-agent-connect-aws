@@ -4,6 +4,9 @@ Pure: no network, no credentials, no clock. Everything here is a function of the
 config plus the deployed Lambda URL and session token, which is what makes the
 generated flow snapshot-testable.
 
+The ``ivr_config`` import resolves via the ``sys.path`` entry added by
+``studio/__init__.py``, so the ``studio`` package must be initialised first.
+
 Flow shape:
 
     Trigger (incomingCall)
