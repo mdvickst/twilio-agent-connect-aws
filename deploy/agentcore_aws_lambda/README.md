@@ -81,7 +81,7 @@ Nothing else in your Twilio account is created or modified. The Conversation Orc
 ### Twilio Requirements
 
 - A Twilio phone number
-- A **Conversation Orchestrator configuration** (`WR...`) with **capture rules** for the IVR number — see the next section
+- A **Conversation Orchestrator configuration** (its ID looks like `conv_configuration_...`) with **capture rules** for the IVR number — see the next section
 - An **API Key** (`SK...`) and its Secret. A **Standard** key is sufficient — a Main key is not required. Create one at **Console → Account → API keys & tokens**.
   - The Secret is displayed **once**, when the key is created. It cannot be retrieved later — if you lose it, create a new key.
   - The wizard's **Test connection** authenticates with the API Key and Secret, **not** the Auth Token. It reads only `IncomingPhoneNumbers` and the Conversation Orchestrator configurations, both scoped to the Account SID you enter — it never touches `/Accounts`, which is account management and would require a Main key.
