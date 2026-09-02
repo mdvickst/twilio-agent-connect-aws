@@ -98,6 +98,26 @@ def test_sip_uri_accepts_bare_domain_uri():
     assert dest.uri == "sip:pbx.example.com"
 
 
+@pytest.mark.parametrize(
+    "uri",
+    [
+        "sip:pbx.example.com evil",
+        "sip:a@b\nsip:c@d",
+        "sip:a@b, sip:c@d",
+    ],
+)
+def test_sip_uri_rejects_embedded_whitespace(uri: str):
+    """Whitespace inside a SIP URI must be rejected.
+
+    Pydantic's ``pattern`` is a search, not a fullmatch, so the pattern needs its
+    own end anchor. Without one these values validate, land in the Studio
+    widget's ``sip_endpoint``, publish successfully, and then fail at dial time —
+    a silent failure on a live call.
+    """
+    with pytest.raises(ValidationError):
+        SipDestination(uri=uri)
+
+
 def test_sip_uri_accepts_sips_scheme():
     dest = SipDestination(uri="sips:secure@pbx.example.com")
     assert dest.uri == "sips:secure@pbx.example.com"

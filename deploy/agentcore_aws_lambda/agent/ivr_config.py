@@ -24,7 +24,7 @@ CONFIG_FILENAME = "ivr-config.json"
 FALLBACK_KEY = "fallback"
 
 E164_PATTERN = r"^\+[1-9]\d{1,14}$"
-SIP_URI_PATTERN = r"^sips?:\S+"
+SIP_URI_PATTERN = r"^sips?:\S+$"
 SIP_HEADER_KEY_PATTERN = r"^X-[A-Za-z0-9-]+$"
 EXTENSION_PATTERN = r"^[0-9*#]{1,20}$"
 INTENT_KEY_PATTERN = r"^[a-z0-9][a-z0-9_]{0,30}$"

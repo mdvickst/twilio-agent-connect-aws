@@ -149,7 +149,7 @@ def handle_session(
 
     # parsed is guaranteed non-None here: compare_digest would have failed otherwise.
     call_sid = parsed.get("CallSid")  # type: ignore[union-attr]
-    if not isinstance(call_sid, str) or not CALL_SID_PATTERN.match(call_sid):
+    if not isinstance(call_sid, str) or not CALL_SID_PATTERN.fullmatch(call_sid):
         return json_response(400, {"error": "Missing or malformed CallSid"})
 
     try:

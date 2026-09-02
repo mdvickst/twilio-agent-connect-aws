@@ -249,6 +249,22 @@ def test_extension_destination_does_not_wait_for_control_to_return():
     assert states[dial_state_name("billing")]["properties"]["timeout"] == 0
 
 
+def test_extension_destination_uses_the_documented_fail_event_name():
+    """The redirect widget's failure event is ``fail``, not ``failed``.
+
+    Twilio's flow-definition JSON sample uses ``fail`` while the widget page's
+    prose table says "Failed". The JSON is the wire name; ``failed`` causes a 400
+    on publish, which would break every config containing an extension.
+    """
+    raw = minimal_config_dict()
+    raw["intents"][0]["destination"]["extension"] = "402"
+    states = states_by_name(build(IVRConfig.model_validate(raw)))
+
+    events = {t["event"] for t in states[dial_state_name("billing")]["transitions"]}
+    assert events == {"return", "timeout", "fail"}
+    assert "failed" not in events
+
+
 def test_extension_destination_has_no_dial_status_check():
     raw = minimal_config_dict()
     raw["intents"][0]["destination"]["extension"] = "402"

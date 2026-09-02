@@ -172,7 +172,7 @@ def main() -> int:
         print(
             f"  Validation request failed: {error.status} {error.msg}\n"
             "  If the error names an unknown widget type, run "
-            "'python -m studio.discover' to probe the real type string,\n"
+            "'PYTHONPATH=deploy/agentcore_aws_lambda python -m studio.discover' to probe the real type string,\n"
             "  then update CR_WIDGET_TYPE in studio/widgets.py (UNVERIFIED constants).",
             file=sys.stderr,
         )
@@ -180,7 +180,7 @@ def main() -> int:
     if not validation.valid:
         print(
             "  Studio rejected the definition.\n"
-            "  Run 'python -m studio.discover' to probe the ConversationRelay widget "
+            "  Run 'PYTHONPATH=deploy/agentcore_aws_lambda python -m studio.discover' to probe the ConversationRelay widget "
             "type string,\n"
             "  then update CR_WIDGET_TYPE in studio/widgets.py (UNVERIFIED constants).",
             file=sys.stderr,
