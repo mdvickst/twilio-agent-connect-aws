@@ -154,18 +154,56 @@ def create_app(example_root: Path) -> FastAPI:
     return app
 
 
+def _twilio_error_code(error: Exception) -> int | None:
+    """Extract Twilio's numeric error code from any of its exception shapes.
+
+    Single-resource calls raise ``TwilioRestException``, which carries ``.code``.
+    Paged calls (``.list()``) raise a bare ``TwilioException("Unable to fetch
+    page", response)`` from ``twilio/base/page.py`` — no ``.code``, no
+    ``.status``, just the response in ``args``. Since ``verify()`` uses a paged
+    endpoint, reading ``.code`` alone silently misses every error it produces.
+    """
+    code = getattr(error, "code", None)
+    if isinstance(code, int):
+        return code
+
+    for arg in getattr(error, "args", ()):
+        body = getattr(arg, "text", None) or getattr(arg, "content", None)
+        if not isinstance(body, str):
+            continue
+        try:
+            parsed = json.loads(body)
+        except (TypeError, ValueError):
+            continue
+        if isinstance(parsed, dict) and isinstance(parsed.get("code"), int):
+            return int(parsed["code"])
+    return None
+
+
+def _twilio_error_status(error: Exception) -> int | None:
+    """HTTP status from either exception shape."""
+    status = getattr(error, "status", None)
+    if isinstance(status, int):
+        return status
+    for arg in getattr(error, "args", ()):
+        arg_status = getattr(arg, "status_code", None)
+        if isinstance(arg_status, int):
+            return arg_status
+    return None
+
+
 def explain_twilio_failure(error: Exception) -> str:
     """Turn a Twilio or transport failure into something the user can act on.
 
-    The raw ``TwilioRestException`` string reports the HTTP path and a docs link
-    but never says which field is wrong, which is useless in a form where four
-    credentials were entered. Twilio's own error code is the reliable signal, so
-    map the ones this endpoint can actually provoke.
+    The raw exception string reports the HTTP path and a docs link but never says
+    which field is wrong, which is useless in a form where four credentials were
+    entered. Twilio's own error code is the reliable signal, so map the ones this
+    endpoint can actually provoke.
     """
-    code = getattr(error, "code", None)
-
     if isinstance(error, AccountMismatchError):
         return str(error)
+
+    code = _twilio_error_code(error)
 
     if code == 20003:
         return (
@@ -183,7 +221,7 @@ def explain_twilio_failure(error: Exception) -> str:
             "account the API key belongs to — a subaccount SID with a parent-account "
             "key, or vice versa, produces this."
         )
-    if code == 20429 or getattr(error, "status", None) == 429:
+    if code == 20429 or _twilio_error_status(error) == 429:
         return "Twilio rate-limited this request (429). Wait a moment and try again."
 
     if isinstance(error, httpx.HTTPStatusError):

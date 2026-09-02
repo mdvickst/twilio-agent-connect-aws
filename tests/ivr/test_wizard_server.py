@@ -329,3 +329,62 @@ def test_explain_20003_does_not_claim_a_main_key_is_needed():
 
     assert "Standard key is sufficient" in message
     assert "Standard key is required" not in message
+
+
+# --- paged vs single-resource exception shapes -------------------------------
+
+
+def _paged_failure(status: int, body: str):
+    """What ``twilio/base/page.py:62`` raises: a bare TwilioException + Response.
+
+    Not a TwilioRestException — it has no ``.code``, ``.status`` or ``.msg``.
+    """
+    from twilio.base.exceptions import TwilioException
+    from twilio.http.response import Response
+
+    return TwilioException("Unable to fetch page", Response(status, body))
+
+
+def test_explains_20003_from_a_paged_call():
+    """verify() uses accounts.list(), whose 401 arrives in the paged shape.
+
+    Reading ``.code`` alone misses it entirely and the user gets the raw tuple
+    repr instead of an explanation.
+    """
+    from wizard.server import explain_twilio_failure
+
+    error = _paged_failure(401, '{"code":20003,"message":"Authenticate","status":401}')
+
+    message = explain_twilio_failure(error)
+
+    assert "20003" in message
+    assert "API Key Secret" in message
+    assert "Unable to fetch page" not in message
+
+
+def test_explains_rate_limit_from_a_paged_call():
+    from wizard.server import explain_twilio_failure
+
+    message = explain_twilio_failure(
+        _paged_failure(429, '{"code":20429,"message":"Too many requests"}')
+    )
+
+    assert "rate-limited" in message
+
+
+def test_error_code_extraction_handles_both_exception_shapes():
+    from twilio.base.exceptions import TwilioRestException
+    from wizard.server import _twilio_error_code
+
+    assert _twilio_error_code(_paged_failure(401, '{"code":20003}')) == 20003
+    assert (
+        _twilio_error_code(TwilioRestException(401, "/Accounts.json", "Authenticate", 20003, "GET"))
+        == 20003
+    )
+
+
+def test_error_code_extraction_survives_a_non_json_body():
+    """A proxy or gateway can return HTML; that must not raise."""
+    from wizard.server import _twilio_error_code
+
+    assert _twilio_error_code(_paged_failure(502, "<html>bad gateway</html>")) is None
