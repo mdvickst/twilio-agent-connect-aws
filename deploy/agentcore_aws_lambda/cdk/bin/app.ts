@@ -57,6 +57,8 @@ async function main() {
     agentCoreRuntimeArn: agentCoreStack.runtimeArn,
     twilioSecret: secretsStack.twilioSecret,
     twilioConversationConfigurationId: envConfig.twilioConversationConfigurationId,
+    ivrSessionToken: envConfig.ivrSessionToken,
+    ivrExtensionDestinations: envConfig.ivrExtensionDestinations,
     env: {
       account: envConfig.awsAccountId,
       region: envConfig.awsRegion,

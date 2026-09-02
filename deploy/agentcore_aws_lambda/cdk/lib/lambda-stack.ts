@@ -9,6 +9,10 @@ export interface LambdaStackProps extends cdk.StackProps {
   agentCoreRuntimeArn: string;
   twilioSecret: secretsmanager.ISecret;
   twilioConversationConfigurationId: string;
+  /** Shared token the Studio HTTP Request widget sends to /session. */
+  ivrSessionToken: string;
+  /** JSON map of intent key -> {number, sendDigits} for the /dial route. */
+  ivrExtensionDestinations: string;
 }
 
 export class LambdaStack extends cdk.Stack {
@@ -27,6 +31,8 @@ export class LambdaStack extends cdk.Stack {
         AGENTCORE_RUNTIME_ARN: props.agentCoreRuntimeArn,
         TWILIO_SECRET_ARN: props.twilioSecret.secretArn,
         TWILIO_CONVERSATION_CONFIGURATION_ID: props.twilioConversationConfigurationId,
+        IVR_SESSION_TOKEN: props.ivrSessionToken,
+        IVR_EXTENSION_DESTINATIONS: props.ivrExtensionDestinations,
       },
     });
 
