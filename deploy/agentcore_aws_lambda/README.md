@@ -248,6 +248,8 @@ make deploy
 
 Builds the agent and Lambda code, deploys the three CloudFormation stacks, publishes the Studio flow, and wires the phone number. The first deploy takes around 10–15 minutes; subsequent deploys are faster.
 
+**If the Studio step fails,** the AWS stacks are already deployed — the CloudFormation stacks run first, and the flow is published afterwards. Nothing in your Twilio account has been created or changed at that point, so fix the reported problem and re-run `make deploy`; the flow is published idempotently by friendly name, so re-running does not create duplicates. Use `make destroy` if you want to remove the AWS resources instead.
+
 After a successful deploy you should see:
 
 ```
