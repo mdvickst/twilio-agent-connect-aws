@@ -4,20 +4,26 @@ Production deployment options for twilio-agent-connect-aws.
 
 ## Deployments
 
-### AWS Lambda + Bedrock AgentCore (Recommended)
+### AWS Lambda + Bedrock AgentCore — AI IVR (Recommended)
 
-**Architecture:** Twilio Conversation Relay connects directly to AgentCore via WebSocket. Lambda functions handle Twilio webhooks.
+**What it deploys:** A production AI IVR. Callers describe what they need in natural language and are transferred to the right destination — no DTMF menu. A Studio flow runs ConversationRelay against a Bedrock AgentCore runtime; the agent triages and transfers. SMS also works through the same Lambda.
+
+**Architecture:** Studio ConversationRelay connects directly to AgentCore via WebSocket. Lambda handles the Studio `/session` route and Conversation Orchestrator SMS webhooks. No Fargate, ALB, or VPC.
 
 **Key features:**
 
+- AI triage: callers speak naturally, agent routes to the right team
 - Direct WebSocket connection (best performance)
-- No Fargate, ALB, or VPC required
 - Fully serverless (pay-per-request)
-- Single CDK command deployment
+- Single CDK command deployment (`make configure` → `make bootstrap` → `make deploy`)
 
 **Guide:** [`agentcore_aws_lambda/README.md`](agentcore_aws_lambda/README.md)
 
-**Best for:** Production agents with custom code (Strands, LangGraph, OpenAI SDK)
+**Best for:** Replacing a DTMF IVR tree with a natural-language AI that routes callers to the right destination
+
+---
+
+**Note on the other three targets below:** `agentcore_aws_fargate`, `strands_aws_fargate`, and `bedrock_aws_fargate` are plain conversational-assistant examples (no IVR, no intent routing). They demonstrate alternative runtime and infrastructure choices but do not include the Studio flow or destination routing logic.
 
 ---
 
