@@ -117,7 +117,7 @@ This adds the capture rules programmatically. Run `make preflight` afterward to 
 make preflight
 ```
 
-`make preflight` checks that Voice and Messaging capture rules exist for the IVR number and prints an actionable error if they are missing. `make deploy` does not run this check automatically — run it once before the first deploy and again if calls start dropping.
+`make preflight` checks that Voice and Messaging capture rules exist for the IVR number and prints an actionable error if they are missing. Use it to verify capture rules without deploying. `make deploy` runs this check automatically as part of `studio-deploy` and stops with an actionable error before creating or modifying anything in Twilio if capture rules are missing — so a misconfigured account cannot end up with a published flow that drops every call.
 
 ---
 
@@ -196,6 +196,12 @@ Save your **Account ID** (e.g., `123456789012`) — you will need it in `make co
 
 ---
 
+## Known Unverified: ConversationRelay Widget
+
+No call has been placed through this deployment end to end. The ConversationRelay widget shipped in March 2026 and is absent from Twilio's published widget JSON schemas. `CR_WIDGET_TYPE`, `CR_URL_PROPERTY`, and `CR_VOICE_PROPERTY_MAP` in [`studio/widgets.py`](https://github.com/twilio/twilio-agent-connect-aws/blob/main/deploy/agentcore_aws_lambda/studio/widgets.py) are unverified guesses — the values have not been confirmed against a real account. If `make studio-deploy` returns a 400 from the Flows API, run `studio/discover.py` to probe for the correct type string and fetch the flow definition from the Console to confirm property names, then update `studio/widgets.py`. See [Studio rejects the flow on deploy](#studio-rejects-the-flow-on-deploy-400-from-the-flows-api) for the full procedure.
+
+---
+
 ## Quick Start
 
 ### Step 1 — Configure the IVR
@@ -216,7 +222,25 @@ make bootstrap
 
 Installs CDK dependencies and bootstraps your AWS account for CDK deployments. Only needs to be run once per account/region.
 
-### Step 3 — Deploy
+### Step 3 — Add Capture Rules
+
+If you have not already done this, add Voice and Messaging capture rules for the IVR number to your Conversation Orchestrator configuration — either in the [Console](#add-capture-rules-in-the-console) or with:
+
+```bash
+make capture-rules
+```
+
+Then confirm:
+
+```bash
+make preflight
+```
+
+`make deploy` checks capture rules automatically and stops before touching Twilio if they are missing, but running `make preflight` now surfaces the problem before the multi-stack deploy starts.
+
+See the [Hard Prerequisite](#hard-prerequisite-conversation-orchestrator-capture-rules) section for background.
+
+### Step 4 — Deploy
 
 ```bash
 make deploy
@@ -229,15 +253,6 @@ After a successful deploy you should see:
 ```
 ✓ IVR deployed
 ```
-
-### Step 4 — Add Capture Rules (if not already done)
-
-```bash
-make capture-rules
-make preflight
-```
-
-See the [Hard Prerequisite](#hard-prerequisite-conversation-orchestrator-capture-rules) section above.
 
 ---
 
