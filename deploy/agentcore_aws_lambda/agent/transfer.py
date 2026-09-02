@@ -51,12 +51,16 @@ def create_transfer_tool(session: ConversationSession, intent_keys: list[str]) -
             msg = f"Unknown intent {intent!r}. Must be one of: {', '.join(allowed)}"
             raise ValueError(msg)
 
-        session.pending_handoff_data = PendingHandoffData(handoff_data=intent)
+        # Constructed by alias. PendingHandoffData sets populate_by_name, so
+        # handoff_data= also works at runtime, but without the pydantic mypy
+        # plugin the checker only sees the alias. The alias is the wire name
+        # this value ends up on anyway.
+        session.pending_handoff_data = PendingHandoffData(handoffData=intent)
         return {"status": "transfer_initiated", "intent": intent}
 
     # Narrow the annotation to the configured keys so the generated tool schema
     # carries an enum. Strands builds inputSchema from the type hints, so this
     # must happen before decorating.
-    transfer_call.__annotations__["intent"] = Literal[allowed]  # type: ignore[valid-type]
+    transfer_call.__annotations__["intent"] = Literal[allowed]
 
     return tool(transfer_call)
