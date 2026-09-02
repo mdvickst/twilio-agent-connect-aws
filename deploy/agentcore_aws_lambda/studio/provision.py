@@ -10,9 +10,11 @@ Usage, from the repository root with the example's .env exported:
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
+import textwrap
 from typing import Any
 from urllib.parse import urlparse
 
@@ -169,11 +171,20 @@ def main() -> int:
             friendly_name=friendly_name, status="published", definition=definition
         )
     except TwilioRestException as error:
+        print(f"  Validation request failed: {error.status} {error.msg}", file=sys.stderr)
+        # Twilio's message says "check `details`", and details names the exact
+        # state and property it rejected — without it the operator is guessing.
+        details = getattr(error, "details", None)
+        if details:
+            print("  Details reported by Twilio:", file=sys.stderr)
+            print(
+                textwrap.indent(json.dumps(details, indent=2, default=str), "    "), file=sys.stderr
+            )
         print(
-            f"  Validation request failed: {error.status} {error.msg}\n"
-            "  If the error names an unknown widget type, run "
-            "'PYTHONPATH=deploy/agentcore_aws_lambda python -m studio.discover' to probe the real type string,\n"
-            "  then update CR_WIDGET_TYPE in studio/widgets.py (UNVERIFIED constants).",
+            "  If a widget type or property is named above, run "
+            "'PYTHONPATH=deploy/agentcore_aws_lambda python -m studio.discover' to probe the real "
+            "type string,\n"
+            "  then update the UNVERIFIED constants in studio/widgets.py.",
             file=sys.stderr,
         )
         return 1

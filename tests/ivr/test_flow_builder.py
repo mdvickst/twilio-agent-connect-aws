@@ -145,8 +145,9 @@ def test_relay_widget_includes_configured_voice_settings():
     raw["voice"] = {"language": "en-GB", "ttsProvider": "ElevenLabs"}
     states = states_by_name(build(IVRConfig.model_validate(raw)))
     properties = states["ai_agent"]["properties"]
-    # CR_VOICE_PROPERTY_MAP maps "language" -> "language_code" (UNVERIFIED field name).
-    assert properties["language_code"] == "en-GB"
+    # CR_VOICE_PROPERTY_MAP is still UNVERIFIED: the validator silently accepts
+    # unknown optional properties, so a wrong name here is ignored at runtime.
+    assert properties["language"] == "en-GB"
     assert properties["tts_provider"] == "ElevenLabs"
 
 

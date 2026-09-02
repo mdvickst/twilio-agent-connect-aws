@@ -7,24 +7,30 @@ ConversationRelay shipped in March 2026 and is not in those schemas, so its type
 string and property names are pinned here in one place rather than scattered
 through the flow builder.
 
-**``CR_WIDGET_TYPE``, ``CR_URL_PROPERTY`` and ``CR_VOICE_PROPERTY_MAP`` are
-UNVERIFIED.** They are
-educated guesses; no probe has been run against a real Twilio account. Run
-``python -m studio.discover`` with credentials to confirm or correct the type
-string, and build a ConversationRelay widget in the Studio Console and fetch the
-flow definition to confirm the property names. Until then the failure mode is a
-400 from the Flows API when the generated flow is published — loud, not silent.
+**``CR_WIDGET_TYPE`` and ``CR_URL_PROPERTY`` are CONFIRMED** against a live
+account via ``POST /v2/Flows/Validate`` (2026-09-02):
 
-``CR_WIDGET_TYPE`` is set to ``"run-conversationrelay"`` based on three signals:
+- The validator's own type enumeration contains ``run-conversation-relay``.
+  Note the hyphen between "conversation" and "relay" — neither
+  ``conversationrelay`` nor ``run-conversationrelay`` is accepted.
+- ``url`` is required on this widget: renaming or removing it is rejected with
+  ``#/states/N/properties/url is missing but it is required``.
 
-1. The documentation URL is ``/studio/widget-library/run-conversationrelay``.
-2. The docs' Liquid example uses the default widget name ``run_crelay_1`` —
-   Studio derives default instance names from the type slug.
-3. Every other action widget in the schema is verb-prefixed and hyphenated
-   (``run-function``, ``make-http-request``, ``add-twiml-redirect``,
-   ``connect-call-to``).
+**``CR_VOICE_PROPERTY_MAP`` remains UNVERIFIED**, and validation cannot settle
+it: the validator silently ACCEPTS unknown properties (a deliberately bogus key
+validates), so a wrong optional name here fails *silently* — the setting is
+ignored at runtime and the caller just gets Twilio's defaults. It cannot cause a
+400. To confirm, build a ConversationRelay widget in the Studio Console with
+these fields set and fetch the flow definition:
 
-These are still UNVERIFIED — confirm with ``python -m studio.discover``.
+    twilio api:studio:v2:flows:fetch --sid FWxxxx -o json
+
+The names below follow the pattern the confirmed values establish: a Studio
+property is the snake_case form of the underlying TwiML attribute — ``url`` from
+``url``, and in ``connect-call-to``, ``caller_id`` from ``callerId`` and
+``time_limit`` from ``timeLimit``. ``<ConversationRelay>``'s attribute is
+``language``, so ``language`` is used rather than ``language_code`` (the docs
+page labels the *UI field* "Language Code", which is not the property name).
 """
 
 from __future__ import annotations
@@ -36,14 +42,14 @@ SPLIT_TYPE = "split-based-on"
 TWIML_REDIRECT_TYPE = "add-twiml-redirect"
 SAY_PLAY_TYPE = "say-play"
 
-#: UNVERIFIED guess — run studio/discover.py with credentials to confirm.
-#: Set to "run-conversationrelay" based on the doc URL, default instance name,
-#: and the verb-prefixed naming pattern of all other action widgets; see module
-#: docstring for full reasoning.
-CR_WIDGET_TYPE = "run-conversationrelay"
+#: CONFIRMED 2026-09-02 against POST /v2/Flows/Validate, whose type enumeration
+#: contains exactly this string. Mind the hyphen: "run-conversationrelay" is
+#: rejected, as is "conversationrelay".
+CR_WIDGET_TYPE = "run-conversation-relay"
 
 #: Candidates tried by the discovery probe, in order.
 CR_WIDGET_TYPE_CANDIDATES = (
+    "run-conversation-relay",
     "run-conversationrelay",
     "conversationrelay",
     "connect-conversationrelay",
@@ -51,16 +57,16 @@ CR_WIDGET_TYPE_CANDIDATES = (
     "conversation-relay",
 )
 
-#: Property holding the wss:// endpoint on the ConversationRelay widget.
-#: UNVERIFIED — confirm via a Console-built widget fetch.
+#: Property holding the wss:// endpoint. CONFIRMED required — the validator
+#: rejects the definition if it is renamed or absent.
 CR_URL_PROPERTY = "url"
 
 #: Maps IVRConfig.voice field names to ConversationRelay widget property names.
-#: UNVERIFIED — confirm field names via a Console-built widget fetch.
-#: "language" maps to "language_code" because the widget's documented field is
-#: "Language Code" (not bare "language").
+#: STILL UNVERIFIED, and validation cannot confirm these: unknown optional
+#: properties are silently accepted, so a wrong name here is ignored at runtime
+#: rather than rejected. See the module docstring for how to settle it.
 CR_VOICE_PROPERTY_MAP = {
-    "language": "language_code",
+    "language": "language",
     "tts_provider": "tts_provider",
     "voice": "voice",
     "transcription_provider": "transcription_provider",
