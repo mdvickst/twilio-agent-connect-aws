@@ -200,9 +200,30 @@ Save your **Account ID** (e.g., `123456789012`) — you will need it in `make co
 
 ---
 
-## Known Unverified: ConversationRelay Widget
+## Known Unverified
 
-No call has been placed through this deployment end to end. The ConversationRelay widget shipped in March 2026 and is absent from Twilio's published widget JSON schemas. `CR_WIDGET_TYPE`, `CR_URL_PROPERTY`, and `CR_VOICE_PROPERTY_MAP` in [`studio/widgets.py`](https://github.com/twilio/twilio-agent-connect-aws/blob/main/deploy/agentcore_aws_lambda/studio/widgets.py) are unverified guesses — the values have not been confirmed against a real account. If `make studio-deploy` returns a 400 from the Flows API, run `studio/discover.py` to probe for the correct type string and fetch the flow definition from the Console to confirm property names, then update `studio/widgets.py`. See [Studio rejects the flow on deploy](#studio-rejects-the-flow-on-deploy-400-from-the-flows-api) for the full procedure.
+No call has been placed through this deployment end to end.
+
+The ConversationRelay widget's **type** and **`url` property** are confirmed: the
+generated flow validates against `POST /v2/Flows/Validate` on a real account. The
+type is `run-conversation-relay` — note the hyphen between "conversation" and
+"relay".
+
+What remains unverified is `CR_VOICE_PROPERTY_MAP` in
+[`studio/widgets.py`](https://github.com/twilio/twilio-agent-connect-aws/blob/main/deploy/agentcore_aws_lambda/studio/widgets.py)
+— the optional voice settings (`language`, `ttsProvider`, `voice`,
+`transcriptionProvider`, `speechModel`). **Validation cannot confirm these**: the
+Flows validator silently accepts unknown properties, so a wrong name is ignored at
+runtime rather than rejected — the setting simply doesn't apply and the caller gets
+Twilio's defaults. If you set voice options in the wizard and they appear to have no
+effect, build a ConversationRelay widget in the Studio Console with those fields set
+and compare property names:
+
+```bash
+twilio api:studio:v2:flows:fetch --sid FWxxxxxxxx -o json
+```
+
+If you leave the voice settings unset, this does not affect you.
 
 ---
 

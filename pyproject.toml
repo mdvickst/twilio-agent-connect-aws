@@ -135,6 +135,11 @@ combine-as-imports = true
 
 [tool.mypy]
 python_version = "3.10"
+# CDK synth output vendors third-party Python (typing_extensions etc.) that
+# shadows real library modules. It is build output, gitignored, and appears
+# only after a deploy -- but `make type-check` walks deploy/ so it must be
+# excluded or the command breaks for anyone who has deployed.
+exclude = "(^|/)(cdk\\.out|node_modules|\\.venv)/"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
