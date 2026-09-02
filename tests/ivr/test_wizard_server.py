@@ -162,3 +162,84 @@ def test_resources_endpoint_returns_numbers_and_configurations(
     assert body["accountName"] == "Test Account"
     assert body["phoneNumbers"][0]["sid"] == "PN1"
     assert body["conversationConfigurations"][0]["id"] == "WR1"
+
+
+# --- error explanation ------------------------------------------------------
+
+
+def test_explain_20003_names_the_api_key_not_the_auth_token():
+    """Error 20003 must point at the credentials actually used.
+
+    /api/resources authenticates with the API Key SID and Secret, so a message
+    that just echoes Twilio's "Unable to fetch record: Authenticate" leaves the
+    user checking the wrong field.
+    """
+    from twilio.base.exceptions import TwilioRestException
+    from wizard.server import explain_twilio_failure
+
+    message = explain_twilio_failure(
+        TwilioRestException(401, "/Accounts/ACxxx.json", "Unable to fetch record", 20003, "GET")
+    )
+
+    assert "20003" in message
+    assert "API Key Secret" in message
+    assert "shown only once" in message
+
+
+def test_explain_does_not_echo_the_request_uri():
+    """The raw exception string embeds the request path; the reply should not."""
+    from twilio.base.exceptions import TwilioRestException
+    from wizard.server import explain_twilio_failure
+
+    sid = "AC" + "9" * 32
+    message = explain_twilio_failure(
+        TwilioRestException(401, f"/Accounts/{sid}.json", "Unable to fetch record", 20003, "GET")
+    )
+
+    assert sid not in message
+
+
+def test_explain_distinguishes_a_control_plane_rejection():
+    """A Conversations Control Plane 403 is a different fix from a bad API key."""
+    import httpx
+    from wizard.server import explain_twilio_failure
+
+    request = httpx.Request(
+        "GET", "https://conversations.twilio.com/v2/ControlPlane/Configurations"
+    )
+    response = httpx.Response(403, request=request)
+
+    message = explain_twilio_failure(
+        httpx.HTTPStatusError("forbidden", request=request, response=response)
+    )
+
+    assert "Conversation Orchestrator" in message
+    assert "403" in message
+
+
+def test_explain_reports_a_network_failure_as_such():
+    import httpx
+    from wizard.server import explain_twilio_failure
+
+    message = explain_twilio_failure(httpx.ConnectError("connection refused"))
+
+    assert "Could not reach Twilio" in message
+
+
+def test_resources_endpoint_returns_the_explained_message(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+):
+    """The 400 detail carries the explanation, not the raw exception string."""
+    from twilio.base.exceptions import TwilioRestException
+
+    def boom(credentials):
+        raise TwilioRestException(
+            401, "/Accounts/ACxxx.json", "Unable to fetch record", 20003, "GET"
+        )
+
+    monkeypatch.setattr("wizard.server.verify", boom)
+
+    response = client.post("/api/resources", json=CREDENTIALS)
+
+    assert response.status_code == 400
+    assert "API Key Secret" in response.json()["detail"]

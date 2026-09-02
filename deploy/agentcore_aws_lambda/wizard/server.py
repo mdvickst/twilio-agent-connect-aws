@@ -7,9 +7,11 @@ sends credentials with each request that needs them, and nothing is cached.
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
+import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -31,6 +33,8 @@ from .writer import (
     write_config,
     write_env,
 )
+
+logger = logging.getLogger(__name__)
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -115,7 +119,8 @@ def create_app(example_root: Path) -> FastAPI:
             numbers = list_phone_numbers(credentials)
             configurations = list_conversation_configurations(credentials)
         except Exception as error:
-            raise HTTPException(status_code=400, detail=str(error)) from error
+            logger.warning(f"Twilio lookup failed: {type(error).__name__}: {error}")
+            raise HTTPException(status_code=400, detail=explain_twilio_failure(error)) from error
 
         return {
             "accountName": account_name,
@@ -146,6 +151,54 @@ def create_app(example_root: Path) -> FastAPI:
         }
 
     return app
+
+
+def explain_twilio_failure(error: Exception) -> str:
+    """Turn a Twilio or transport failure into something the user can act on.
+
+    The raw ``TwilioRestException`` string reports the HTTP path and a docs link
+    but never says which field is wrong, which is useless in a form where four
+    credentials were entered. Twilio's own error code is the reliable signal, so
+    map the ones this endpoint can actually provoke.
+    """
+    code = getattr(error, "code", None)
+
+    if code == 20003:
+        return (
+            "Twilio rejected the credentials (error 20003). This request is "
+            "authenticated with the API Key SID and API Key Secret — not the Auth "
+            "Token — so check those two first. Common causes: the secret is wrong "
+            "(it is shown only once when the key is created, so it cannot be "
+            "recovered — create a new key instead), the API key belongs to a "
+            "different account or subaccount than the Account SID entered, or the "
+            "Auth Token was pasted into the API Secret field. A Standard key is "
+            "required; a Restricted key without Account read access also fails here."
+        )
+    if code == 20404:
+        return (
+            "Twilio could not find that Account SID (error 20404). Check it is the "
+            "account the API key belongs to — a subaccount SID with a parent-account "
+            "key, or vice versa, produces this."
+        )
+    if code == 20429 or getattr(error, "status", None) == 429:
+        return "Twilio rate-limited this request (429). Wait a moment and try again."
+
+    if isinstance(error, httpx.HTTPStatusError):
+        status = error.response.status_code
+        if status in (401, 403):
+            return (
+                f"Conversation Orchestrator rejected the API key ({status}). The "
+                "phone-number lookup may have succeeded — this step calls the "
+                "Conversations Control Plane, which needs the same API key to have "
+                "access to Conversation Orchestrator on this account."
+            )
+        return f"Conversation Orchestrator returned HTTP {status}."
+    if isinstance(error, httpx.RequestError):
+        return f"Could not reach Twilio: {error.__class__.__name__}. Check your network."
+
+    detail = getattr(error, "msg", None) or str(error)
+    suffix = f" (Twilio error {code})" if code else ""
+    return f"Twilio lookup failed: {detail}{suffix}"
 
 
 #: Directory holding ``.env`` and ``ivr-config.json`` — the example root, two
