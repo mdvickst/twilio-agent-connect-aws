@@ -82,6 +82,9 @@ Nothing else in your Twilio account is created or modified. The Conversation Orc
 
 - A Twilio phone number
 - A **Conversation Orchestrator configuration** (`WR...`) with **capture rules** for the IVR number — see the next section
+- An **API Key** (`SK...`) and its Secret. A **Standard** key is sufficient. Create one at **Console → Account → API keys & tokens**.
+  - The Secret is displayed **once**, when the key is created. It cannot be retrieved later — if you lose it, create a new key.
+  - The wizard's **Test connection** authenticates with the API Key and Secret, not the Auth Token. A `20003` error there means the key or secret is wrong, or the key belongs to a different account than the Account SID you entered.
 
 ---
 

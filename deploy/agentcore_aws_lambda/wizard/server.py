@@ -19,6 +19,7 @@ from ivr_config import CONFIG_FILENAME, IVRConfig
 from pydantic import BaseModel, Field, ValidationError
 
 from .twilio_lookup import (
+    AccountMismatchError,
     TwilioCredentials,
     list_conversation_configurations,
     list_phone_numbers,
@@ -163,6 +164,9 @@ def explain_twilio_failure(error: Exception) -> str:
     """
     code = getattr(error, "code", None)
 
+    if isinstance(error, AccountMismatchError):
+        return str(error)
+
     if code == 20003:
         return (
             "Twilio rejected the credentials (error 20003). This request is "
@@ -170,9 +174,8 @@ def explain_twilio_failure(error: Exception) -> str:
             "Token — so check those two first. Common causes: the secret is wrong "
             "(it is shown only once when the key is created, so it cannot be "
             "recovered — create a new key instead), the API key belongs to a "
-            "different account or subaccount than the Account SID entered, or the "
-            "Auth Token was pasted into the API Secret field. A Standard key is "
-            "required; a Restricted key without Account read access also fails here."
+            "different account than the Account SID entered, or the Auth Token was "
+            "pasted into the API Secret field. A Standard key is sufficient here."
         )
     if code == 20404:
         return (

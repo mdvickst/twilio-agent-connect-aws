@@ -243,3 +243,89 @@ def test_resources_endpoint_returns_the_explained_message(
 
     assert response.status_code == 400
     assert "API Key Secret" in response.json()["detail"]
+
+
+# --- verify() uses the Standard-key-safe endpoint ---------------------------
+
+
+def _account(sid: str, friendly_name: str | None):
+    from unittest.mock import MagicMock
+
+    account = MagicMock()
+    account.sid = sid
+    account.friendly_name = friendly_name
+    return account
+
+
+def test_verify_lists_accounts_rather_than_fetching_one():
+    """``/Accounts/{sid}`` needs a **Main** API key; the list works with Standard.
+
+    Requiring a Main key just to populate two dropdowns would be a bad trade, so
+    verify() must call accounts.list, not accounts(sid).fetch.
+    """
+    from unittest.mock import patch
+
+    from wizard.twilio_lookup import TwilioCredentials, verify
+
+    sid = "AC" + "1" * 32
+    creds = TwilioCredentials(
+        accountSid=sid, authToken="t", apiKey="SK" + "2" * 32, apiSecret="s" * 32
+    )
+
+    with patch("wizard.twilio_lookup.Client") as client:
+        accounts = client.return_value.api.v2010.accounts
+        accounts.list.return_value = [_account(sid, "My Account")]
+
+        assert verify(creds) == "My Account"
+
+        accounts.list.assert_called_once_with(limit=20)
+        accounts.assert_not_called()  # i.e. no accounts(sid).fetch()
+
+
+def test_verify_rejects_a_key_that_cannot_see_the_entered_account():
+    """A key for another account must fail loudly, not silently misconfigure."""
+    from unittest.mock import patch
+
+    from wizard.twilio_lookup import AccountMismatchError, TwilioCredentials, verify
+
+    creds = TwilioCredentials(
+        accountSid="AC" + "1" * 32, authToken="t", apiKey="SK" + "2" * 32, apiSecret="s" * 32
+    )
+    other = "AC" + "9" * 32
+
+    with patch("wizard.twilio_lookup.Client") as client:
+        client.return_value.api.v2010.accounts.list.return_value = [_account(other, "Other")]
+
+        with pytest.raises(AccountMismatchError) as excinfo:
+            verify(creds)
+
+    assert other in str(excinfo.value)
+
+
+def test_verify_falls_back_to_the_sid_when_there_is_no_friendly_name():
+    from unittest.mock import patch
+
+    from wizard.twilio_lookup import TwilioCredentials, verify
+
+    sid = "AC" + "1" * 32
+    creds = TwilioCredentials(
+        accountSid=sid, authToken="t", apiKey="SK" + "2" * 32, apiSecret="s" * 32
+    )
+
+    with patch("wizard.twilio_lookup.Client") as client:
+        client.return_value.api.v2010.accounts.list.return_value = [_account(sid, None)]
+
+        assert verify(creds) == sid
+
+
+def test_explain_20003_does_not_claim_a_main_key_is_needed():
+    """A Standard key is sufficient now that verify() lists accounts."""
+    from twilio.base.exceptions import TwilioRestException
+    from wizard.server import explain_twilio_failure
+
+    message = explain_twilio_failure(
+        TwilioRestException(401, "/Accounts.json", "Authenticate", 20003, "GET")
+    )
+
+    assert "Standard key is sufficient" in message
+    assert "Standard key is required" not in message

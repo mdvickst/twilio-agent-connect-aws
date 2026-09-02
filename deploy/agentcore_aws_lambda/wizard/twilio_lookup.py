@@ -27,14 +27,47 @@ class TwilioCredentials(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+#: Matches ``GET /2010-04-01/Accounts.json?PageSize=20``.
+ACCOUNT_LIST_LIMIT = 20
+
+
+class AccountMismatchError(Exception):
+    """The API key authenticates, but not for the Account SID that was entered.
+
+    Worth its own type: everything downstream — the Studio flow, the Lambda, the
+    Orchestrator configuration — is keyed on the Account SID the user typed, so
+    proceeding with a key for a different account would silently misconfigure the
+    whole deployment rather than fail here.
+    """
+
+
 def _client(credentials: TwilioCredentials) -> Client:
     return Client(credentials.api_key, credentials.api_secret, credentials.account_sid)
 
 
 def verify(credentials: TwilioCredentials) -> str:
-    """Confirm the credentials work and return the account's friendly name."""
-    account = _client(credentials).api.v2010.accounts(credentials.account_sid).fetch()
-    return str(account.friendly_name)
+    """Confirm the credentials work and return the account's friendly name.
+
+    Lists accounts (``GET /2010-04-01/Accounts.json``) rather than fetching
+    ``/Accounts/{sid}``. The fetch requires a **Main** API key — a Standard key
+    gets 20003 on it — and requiring a Main key just to populate two dropdowns
+    would be a poor trade for the customer. The list works with a Standard key.
+
+    Raises:
+        AccountMismatchError: If the key works but cannot see the Account SID
+            entered, or sees no accounts at all.
+    """
+    accounts = _client(credentials).api.v2010.accounts.list(limit=ACCOUNT_LIST_LIMIT)
+
+    for account in accounts:
+        if account.sid == credentials.account_sid:
+            return str(account.friendly_name or account.sid)
+
+    visible = ", ".join(a.sid for a in accounts if a.sid) or "none"
+    raise AccountMismatchError(
+        f"The API key authenticated, but it cannot see account "
+        f"{credentials.account_sid}. Accounts this key can see: {visible}."
+    )
 
 
 def _supports_voice(number: Any) -> bool:
