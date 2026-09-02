@@ -19,11 +19,9 @@ from ivr_config import CONFIG_FILENAME, IVRConfig
 from pydantic import BaseModel, Field, ValidationError
 
 from .twilio_lookup import (
-    AccountMismatchError,
     TwilioCredentials,
     list_conversation_configurations,
     list_phone_numbers,
-    verify,
 )
 from .writer import (
     ENV_FILENAME,
@@ -114,9 +112,14 @@ def create_app(example_root: Path) -> FastAPI:
 
     @app.post("/api/resources")
     def resources(credentials: TwilioCredentials) -> dict[str, Any]:
-        """Verify credentials and list the numbers and configurations to choose from."""
+        """Verify credentials and list the numbers and configurations to choose from.
+
+        The phone-number lookup *is* the credential check — it reads a normal
+        resource scoped to the entered Account SID, so a Standard API key
+        suffices. There is deliberately no call to ``/Accounts``, which would
+        require a Main key.
+        """
         try:
-            account_name = verify(credentials)
             numbers = list_phone_numbers(credentials)
             configurations = list_conversation_configurations(credentials)
         except Exception as error:
@@ -124,7 +127,7 @@ def create_app(example_root: Path) -> FastAPI:
             raise HTTPException(status_code=400, detail=explain_twilio_failure(error)) from error
 
         return {
-            "accountName": account_name,
+            "accountName": credentials.account_sid,
             "phoneNumbers": numbers,
             "conversationConfigurations": configurations,
         }
@@ -160,8 +163,9 @@ def _twilio_error_code(error: Exception) -> int | None:
     Single-resource calls raise ``TwilioRestException``, which carries ``.code``.
     Paged calls (``.list()``) raise a bare ``TwilioException("Unable to fetch
     page", response)`` from ``twilio/base/page.py`` — no ``.code``, no
-    ``.status``, just the response in ``args``. Since ``verify()`` uses a paged
-    endpoint, reading ``.code`` alone silently misses every error it produces.
+    ``.status``, just the response in ``args``. The phone-number lookup this
+    endpoint depends on is paged, so reading ``.code`` alone silently misses
+    every error it produces.
     """
     code = getattr(error, "code", None)
     if isinstance(code, int):
@@ -200,9 +204,6 @@ def explain_twilio_failure(error: Exception) -> str:
     entered. Twilio's own error code is the reliable signal, so map the ones this
     endpoint can actually provoke.
     """
-    if isinstance(error, AccountMismatchError):
-        return str(error)
-
     code = _twilio_error_code(error)
 
     if code == 20003:
@@ -213,7 +214,8 @@ def explain_twilio_failure(error: Exception) -> str:
             "(it is shown only once when the key is created, so it cannot be "
             "recovered — create a new key instead), the API key belongs to a "
             "different account than the Account SID entered, or the Auth Token was "
-            "pasted into the API Secret field. A Standard key is sufficient here."
+            "pasted into the API Secret field. A Standard key is sufficient — this "
+            "reads IncomingPhoneNumbers, not account management."
         )
     if code == 20404:
         return (

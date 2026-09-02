@@ -27,47 +27,11 @@ class TwilioCredentials(BaseModel):
     model_config = {"populate_by_name": True}
 
 
-#: Matches ``GET /2010-04-01/Accounts.json?PageSize=20``.
-ACCOUNT_LIST_LIMIT = 20
-
-
-class AccountMismatchError(Exception):
-    """The API key authenticates, but not for the Account SID that was entered.
-
-    Worth its own type: everything downstream — the Studio flow, the Lambda, the
-    Orchestrator configuration — is keyed on the Account SID the user typed, so
-    proceeding with a key for a different account would silently misconfigure the
-    whole deployment rather than fail here.
-    """
+MAX_PHONE_NUMBERS = 200
 
 
 def _client(credentials: TwilioCredentials) -> Client:
     return Client(credentials.api_key, credentials.api_secret, credentials.account_sid)
-
-
-def verify(credentials: TwilioCredentials) -> str:
-    """Confirm the credentials work and return the account's friendly name.
-
-    Lists accounts (``GET /2010-04-01/Accounts.json``) rather than fetching
-    ``/Accounts/{sid}``. The fetch requires a **Main** API key — a Standard key
-    gets 20003 on it — and requiring a Main key just to populate two dropdowns
-    would be a poor trade for the customer. The list works with a Standard key.
-
-    Raises:
-        AccountMismatchError: If the key works but cannot see the Account SID
-            entered, or sees no accounts at all.
-    """
-    accounts = _client(credentials).api.v2010.accounts.list(limit=ACCOUNT_LIST_LIMIT)
-
-    for account in accounts:
-        if account.sid == credentials.account_sid:
-            return str(account.friendly_name or account.sid)
-
-    visible = ", ".join(a.sid for a in accounts if a.sid) or "none"
-    raise AccountMismatchError(
-        f"The API key authenticated, but it cannot see account "
-        f"{credentials.account_sid}. Accounts this key can see: {visible}."
-    )
 
 
 def _supports_voice(number: Any) -> bool:
@@ -85,8 +49,21 @@ def _supports_voice(number: Any) -> bool:
 
 
 def list_phone_numbers(credentials: TwilioCredentials) -> list[dict[str, str]]:
-    """Voice-capable numbers on the account."""
-    numbers = _client(credentials).incoming_phone_numbers.list(limit=200)
+    """Voice-capable numbers on the account.
+
+    This doubles as the credential check. It reads
+    ``/2010-04-01/Accounts/{account_sid}/IncomingPhoneNumbers.json``, which is a
+    normal resource a **Standard** API key can read, and which is scoped to the
+    Account SID the user entered — so a 401 here means either the key/secret is
+    wrong or the key has no access to that account. Both are what the user needs
+    to know, and no extra request is needed to find it out.
+
+    Deliberately does NOT touch ``/Accounts`` or ``/Accounts/{sid}``: those are
+    account-management endpoints and require a **Main** key, which this wizard has
+    no reason to ask for. See
+    https://www.twilio.com/docs/iam/api-keys#types-of-api-keys
+    """
+    numbers = _client(credentials).incoming_phone_numbers.list(limit=MAX_PHONE_NUMBERS)
     return [
         {
             "sid": number.sid,

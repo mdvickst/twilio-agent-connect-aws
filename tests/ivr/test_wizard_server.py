@@ -136,7 +136,7 @@ def test_resources_endpoint_surfaces_a_credential_failure(
     def boom(credentials):
         raise RuntimeError("Authentication failed")
 
-    monkeypatch.setattr("wizard.server.verify", boom)
+    monkeypatch.setattr("wizard.server.list_phone_numbers", boom)
 
     response = client.post("/api/resources", json=CREDENTIALS)
 
@@ -147,7 +147,6 @@ def test_resources_endpoint_surfaces_a_credential_failure(
 def test_resources_endpoint_returns_numbers_and_configurations(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ):
-    monkeypatch.setattr("wizard.server.verify", lambda credentials: "Test Account")
     monkeypatch.setattr(
         "wizard.server.list_phone_numbers",
         lambda credentials: [{"sid": "PN1", "phoneNumber": "+15550000000", "friendlyName": "Main"}],
@@ -159,7 +158,9 @@ def test_resources_endpoint_returns_numbers_and_configurations(
 
     body = client.post("/api/resources", json=CREDENTIALS).json()
 
-    assert body["accountName"] == "Test Account"
+    # The SID, not a friendly name: learning the friendly name needs an
+    # /Accounts call, which requires a Main API key.
+    assert body["accountName"] == CREDENTIALS["accountSid"]
     assert body["phoneNumbers"][0]["sid"] == "PN1"
     assert body["conversationConfigurations"][0]["id"] == "WR1"
 
@@ -237,98 +238,12 @@ def test_resources_endpoint_returns_the_explained_message(
             401, "/Accounts/ACxxx.json", "Unable to fetch record", 20003, "GET"
         )
 
-    monkeypatch.setattr("wizard.server.verify", boom)
+    monkeypatch.setattr("wizard.server.list_phone_numbers", boom)
 
     response = client.post("/api/resources", json=CREDENTIALS)
 
     assert response.status_code == 400
     assert "API Key Secret" in response.json()["detail"]
-
-
-# --- verify() uses the Standard-key-safe endpoint ---------------------------
-
-
-def _account(sid: str, friendly_name: str | None):
-    from unittest.mock import MagicMock
-
-    account = MagicMock()
-    account.sid = sid
-    account.friendly_name = friendly_name
-    return account
-
-
-def test_verify_lists_accounts_rather_than_fetching_one():
-    """``/Accounts/{sid}`` needs a **Main** API key; the list works with Standard.
-
-    Requiring a Main key just to populate two dropdowns would be a bad trade, so
-    verify() must call accounts.list, not accounts(sid).fetch.
-    """
-    from unittest.mock import patch
-
-    from wizard.twilio_lookup import TwilioCredentials, verify
-
-    sid = "AC" + "1" * 32
-    creds = TwilioCredentials(
-        accountSid=sid, authToken="t", apiKey="SK" + "2" * 32, apiSecret="s" * 32
-    )
-
-    with patch("wizard.twilio_lookup.Client") as client:
-        accounts = client.return_value.api.v2010.accounts
-        accounts.list.return_value = [_account(sid, "My Account")]
-
-        assert verify(creds) == "My Account"
-
-        accounts.list.assert_called_once_with(limit=20)
-        accounts.assert_not_called()  # i.e. no accounts(sid).fetch()
-
-
-def test_verify_rejects_a_key_that_cannot_see_the_entered_account():
-    """A key for another account must fail loudly, not silently misconfigure."""
-    from unittest.mock import patch
-
-    from wizard.twilio_lookup import AccountMismatchError, TwilioCredentials, verify
-
-    creds = TwilioCredentials(
-        accountSid="AC" + "1" * 32, authToken="t", apiKey="SK" + "2" * 32, apiSecret="s" * 32
-    )
-    other = "AC" + "9" * 32
-
-    with patch("wizard.twilio_lookup.Client") as client:
-        client.return_value.api.v2010.accounts.list.return_value = [_account(other, "Other")]
-
-        with pytest.raises(AccountMismatchError) as excinfo:
-            verify(creds)
-
-    assert other in str(excinfo.value)
-
-
-def test_verify_falls_back_to_the_sid_when_there_is_no_friendly_name():
-    from unittest.mock import patch
-
-    from wizard.twilio_lookup import TwilioCredentials, verify
-
-    sid = "AC" + "1" * 32
-    creds = TwilioCredentials(
-        accountSid=sid, authToken="t", apiKey="SK" + "2" * 32, apiSecret="s" * 32
-    )
-
-    with patch("wizard.twilio_lookup.Client") as client:
-        client.return_value.api.v2010.accounts.list.return_value = [_account(sid, None)]
-
-        assert verify(creds) == sid
-
-
-def test_explain_20003_does_not_claim_a_main_key_is_needed():
-    """A Standard key is sufficient now that verify() lists accounts."""
-    from twilio.base.exceptions import TwilioRestException
-    from wizard.server import explain_twilio_failure
-
-    message = explain_twilio_failure(
-        TwilioRestException(401, "/Accounts.json", "Authenticate", 20003, "GET")
-    )
-
-    assert "Standard key is sufficient" in message
-    assert "Standard key is required" not in message
 
 
 # --- paged vs single-resource exception shapes -------------------------------
@@ -388,3 +303,34 @@ def test_error_code_extraction_survives_a_non_json_body():
     from wizard.server import _twilio_error_code
 
     assert _twilio_error_code(_paged_failure(502, "<html>bad gateway</html>")) is None
+
+
+def test_resources_never_calls_an_account_management_endpoint():
+    """A Standard API key must be sufficient.
+
+    ``/Accounts`` and ``/Accounts/{sid}`` are account-management resources and
+    require a **Main** key. The phone-number lookup is scoped to the entered
+    Account SID, so it validates the credentials and the account access at once
+    without asking the customer for a more privileged key.
+    """
+    from unittest.mock import MagicMock, patch
+
+    from wizard.twilio_lookup import TwilioCredentials, list_phone_numbers
+
+    creds = TwilioCredentials(
+        accountSid="AC" + "1" * 32, authToken="t", apiKey="SK" + "2" * 32, apiSecret="s" * 32
+    )
+
+    with patch("wizard.twilio_lookup.Client") as client:
+        number = MagicMock()
+        number.sid = "PN" + "3" * 32
+        number.phone_number = "+15550000000"
+        number.friendly_name = "Main"
+        number.capabilities = {"voice": True}
+        client.return_value.incoming_phone_numbers.list.return_value = [number]
+
+        list_phone_numbers(creds)
+
+        client.return_value.incoming_phone_numbers.list.assert_called_once_with(limit=200)
+        # No /Accounts traversal of any kind.
+        assert not client.return_value.api.v2010.accounts.mock_calls
