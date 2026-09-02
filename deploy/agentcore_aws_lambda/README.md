@@ -248,7 +248,7 @@ make deploy
 
 Builds the agent and Lambda code, deploys the three CloudFormation stacks, publishes the Studio flow, and wires the phone number. The first deploy takes around 10–15 minutes; subsequent deploys are faster.
 
-**If the Studio step fails,** the AWS stacks are already deployed — the CloudFormation stacks run first, and the flow is published afterwards. Nothing in your Twilio account has been created or changed at that point, so fix the reported problem and re-run `make deploy`; the flow is published idempotently by friendly name, so re-running does not create duplicates. Use `make destroy` if you want to remove the AWS resources instead.
+**If the Studio step fails,** the AWS stacks are already deployed — the CloudFormation stacks run first, and the flow is published afterwards. What happened in Twilio depends on where the failure occurred: if the flow *publication* failed, nothing in your Twilio account was created or changed; if the flow published but the number-wiring step failed, the flow exists in Studio but your phone number's webhook was not changed (the deploy output will say so). Either way, fix the reported problem and re-run `make deploy`; the flow is published idempotently by friendly name, so re-running does not create duplicates. Use `make destroy` if you want to remove the AWS resources instead.
 
 After a successful deploy you should see:
 
@@ -264,7 +264,7 @@ The wizard collects one or more intents, each with a destination, plus a require
 
 | Destination type | What to provide | Studio widget | Notes |
 |---|---|---|---|
-| Phone number | E.164 number (e.g. `+15551234567`) | `connect-call-to` (noun: number) | Caller ID is the IVR number |
+| Phone number | E.164 number (e.g. `+15551234567`) | `connect-call-to` (noun: number) | Caller ID is `{{contact.channel.address}}` — the *inbound* caller's number, not the IVR number. The destination sees the original caller's CID with no STIR/SHAKEN attestation on the transferred leg, which some international or SIP destinations may reject. Use `{{flow.channel.address}}` in `studio/flow_builder.py` instead if you want the IVR number presented. |
 | Phone + extension | E.164 number + extension digits | `add-twiml-redirect` to Lambda `/dial` | Studio's dial widget has no `sendDigits`, so extensions are handled by Lambda-generated TwiML. `w` characters in the DTMF string represent half-second pauses. |
 | SIP URI | `sip:agent@pbx.example.com` | `connect-call-to` (noun: sip) | Custom headers must start with `X-` per Twilio's requirement. Digest credentials (`username` / `password`) are supported. Headers are appended to the URI as URL-encoded parameters. |
 | Twilio Client | Client identity string | `connect-call-to` (noun: client) | Up to 121 characters |
@@ -371,10 +371,11 @@ The ConversationRelay widget's type string or property names changed.
 
 **Background:** `CR_WIDGET_TYPE`, `CR_URL_PROPERTY`, and `CR_VOICE_PROPERTY_MAP` in [`studio/widgets.py`](https://github.com/twilio/twilio-agent-connect-aws/blob/main/deploy/agentcore_aws_lambda/studio/widgets.py) are **unverified guesses**. The ConversationRelay widget shipped in March 2026 and is absent from Twilio's published widget JSON schemas. The values have not been confirmed against a real account. If they are wrong, the Flows API returns a 400.
 
-**Fix:** Run the discovery probe to find the correct type string:
+**Fix:** Run the discovery probe to find the correct type string (from the repo root, with API key credentials — `studio/discover.py` requires `TWILIO_API_KEY` and `TWILIO_API_SECRET`; an auth token alone exits with an error):
 
 ```bash
-TWILIO_ACCOUNT_SID=ACxxx TWILIO_AUTH_TOKEN=xxx \
+TWILIO_ACCOUNT_SID=ACxxx TWILIO_API_KEY=SKxxx TWILIO_API_SECRET=xxx \
+    PYTHONPATH=deploy/agentcore_aws_lambda \
     uv run python -m studio.discover
 ```
 

@@ -15,6 +15,7 @@ import base64
 import binascii
 import hmac
 import json
+import re
 from collections.abc import Callable
 from typing import Any, Protocol
 from xml.sax.saxutils import quoteattr
@@ -25,6 +26,12 @@ logger = get_logger(__name__)
 
 SESSION_PATH = "/session"
 DIAL_PATH = "/dial"
+
+#: Twilio Call SIDs are always "CA" followed by exactly 32 hexadecimal characters.
+#: Validating the shape limits the blast radius of the shared session token: a
+#: caller who can read the Studio flow cannot mint presigned URLs for arbitrary
+#: session IDs or collide with a live call's session by guessing a real CallSid.
+CALL_SID_PATTERN = re.compile(r"^CA[0-9a-fA-F]{32}$")
 
 UNAVAILABLE_MESSAGE = "Sorry, that option is not available right now. Please call again later."
 
@@ -142,8 +149,8 @@ def handle_session(
 
     # parsed is guaranteed non-None here: compare_digest would have failed otherwise.
     call_sid = parsed.get("CallSid")  # type: ignore[union-attr]
-    if not isinstance(call_sid, str) or not call_sid:
-        return json_response(400, {"error": "Missing CallSid"})
+    if not isinstance(call_sid, str) or not CALL_SID_PATTERN.match(call_sid):
+        return json_response(400, {"error": "Missing or malformed CallSid"})
 
     try:
         websocket_url = presign(call_sid)

@@ -1,5 +1,13 @@
 "use strict";
 
+/**
+ * The config object most recently loaded by restore(), used as a baseline by
+ * collectConfig() so that fields the form does not manage (ttsProvider,
+ * transcriptionProvider, speechModel, SIP password) survive a round-trip save.
+ * @type {object|null}
+ */
+let _loadedConfig = null;
+
 const form = document.getElementById("ivr-form");
 const intentList = document.getElementById("intent-list");
 const banner = document.getElementById("banner");
@@ -157,7 +165,10 @@ function addIntentRow(data) {
   if (data) {
     nameField.value = data.name || "";
     row.querySelector('[name="description"]').value = data.description || "";
-    slugNode.textContent = data.key || slugify(nameField.value) || "—";
+    // Always show the slug that save() will actually write (slugify of the name
+    // field), not data.key.  A hand-edited key in ivr-config.json would differ
+    // from slugify(name) and the badge would display a value that is never saved.
+    slugNode.textContent = slugify(nameField.value) || "—";
     applyDestination(editor, data.destination);
   }
 
@@ -195,6 +206,7 @@ function applyDestination(fieldset, destination) {
   setField("extensionPauseSeconds", destination.extensionPauseSeconds);
   setField("uri", destination.uri);
   setField("username", destination.username);
+  setField("password", destination.password);
   setField("identity", destination.identity);
 
   if (destination.headers) {
@@ -212,11 +224,24 @@ function field(name) {
 }
 
 function collectConfig() {
-  const voice = {};
+  // Start from the loaded baseline so fields the form does not manage
+  // (ttsProvider, transcriptionProvider, speechModel) survive a round-trip.
+  // Fields the form *does* own (language, voice) win: a cleared field deletes
+  // the baseline value rather than letting a stale value sneak back in.
+  const voice =
+    _loadedConfig && _loadedConfig.voice ? { ..._loadedConfig.voice } : {};
   const language = field("language").value;
   const voiceName = field("voice").value.trim();
-  if (language) voice.language = language;
-  if (voiceName) voice.voice = voiceName;
+  if (language) {
+    voice.language = language;
+  } else {
+    delete voice.language;
+  }
+  if (voiceName) {
+    voice.voice = voiceName;
+  } else {
+    delete voice.voice;
+  }
 
   const numberSelect = field("phoneNumberSid");
   const selectedOption = numberSelect.options[numberSelect.selectedIndex];
@@ -478,6 +503,10 @@ async function restore() {
     addIntentRow();
     return;
   }
+
+  // Store the loaded config so collectConfig() can merge over it and preserve
+  // fields the form does not expose (ttsProvider, transcriptionProvider, etc.).
+  _loadedConfig = config;
 
   field("businessName").value = config.business.name;
   field("businessPrompt").value = config.business.prompt;

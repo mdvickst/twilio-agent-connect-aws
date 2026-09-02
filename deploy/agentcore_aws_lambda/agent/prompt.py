@@ -44,12 +44,33 @@ You are the messaging assistant for {business_name}.
 """
 
 
-def render_intent_catalog(config: IVRConfig) -> str:
-    """Render the routable options, including the fallback, for the system prompt."""
-    lines = ["Options you can transfer to:"]
-    for intent in config.intents:
-        lines.append(f"- {intent.key}: {intent.name} — {intent.description}")
-    lines.append(f"- {FALLBACK_KEY}: {config.fallback.name} — {config.fallback.description}")
+def render_intent_catalog(
+    config: IVRConfig,
+    *,
+    header: str = "Options you can transfer to:",
+    include_keys: bool = True,
+) -> str:
+    """Render the routable options, including the fallback, for the system prompt.
+
+    Args:
+        config: The IVR configuration.
+        header: The section heading.  Voice callers see "Options you can transfer
+            to:" so the model knows it should route; SMS callers see
+            "Departments at this business:" because they have no transfer tool.
+        include_keys: When True (default), prefix each line with the routing slug
+            (e.g. ``- billing: Billing — …``).  Pass False for the SMS prompt
+            where the slug is an internal detail that means nothing to the model
+            or to the texter.
+    """
+    lines = [header]
+    if include_keys:
+        for intent in config.intents:
+            lines.append(f"- {intent.key}: {intent.name} — {intent.description}")
+        lines.append(f"- {FALLBACK_KEY}: {config.fallback.name} — {config.fallback.description}")
+    else:
+        for intent in config.intents:
+            lines.append(f"- {intent.name} — {intent.description}")
+        lines.append(f"- {config.fallback.name} — {config.fallback.description}")
     return "\n".join(lines)
 
 
@@ -82,6 +103,10 @@ def build_sms_system_prompt(config: IVRConfig) -> str:
             ),
             _business_section(config),
             "",
-            render_intent_catalog(config),
+            render_intent_catalog(
+                config,
+                header="Departments at this business:",
+                include_keys=False,
+            ),
         ]
     )

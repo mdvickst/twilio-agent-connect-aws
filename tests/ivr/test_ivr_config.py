@@ -92,6 +92,23 @@ def test_sip_headers_must_use_the_x_prefix_twilio_requires():
         SipDestination(uri="sip:sales@pbx.example.com", headers={"Dept": "sales"})
 
 
+def test_sip_uri_accepts_bare_domain_uri():
+    """A trunk URI with no user-info component must be accepted (Finding 5)."""
+    dest = SipDestination(uri="sip:pbx.example.com")
+    assert dest.uri == "sip:pbx.example.com"
+
+
+def test_sip_uri_accepts_sips_scheme():
+    dest = SipDestination(uri="sips:secure@pbx.example.com")
+    assert dest.uri == "sips:secure@pbx.example.com"
+
+
+def test_sip_uri_rejects_non_sip_string():
+    """A non-SIP URI must still be rejected."""
+    with pytest.raises(ValidationError):
+        SipDestination(uri="https://pbx.example.com")
+
+
 def test_rejects_non_e164_phone_number():
     raw = minimal_config_dict()
     raw["intents"][0]["destination"]["number"] = "555-1234"

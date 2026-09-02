@@ -17,6 +17,29 @@ from wizard.writer import (
 from tests.ivr.test_ivr_config import minimal_config_dict
 
 
+def test_merge_env_collapses_duplicate_key_to_single_updated_line():
+    """A hand-edited .env with the same key twice must produce exactly one line.
+
+    Without this fix, Make's ``-include .env`` takes the *last* occurrence and
+    ``dotenv.config()`` takes the *first*, so the Studio flow embeds one token
+    and the Lambda sees another — every call silently returns 403.
+    """
+    existing = (
+        "AWS_REGION=us-east-1\n"
+        "IVR_SESSION_TOKEN=old-token\n"
+        "# a comment\n"
+        "IVR_SESSION_TOKEN=old-token-duplicate\n"
+        "AWS_ACCOUNT_ID=123456789012\n"
+    )
+    merged = merge_env(existing, {"IVR_SESSION_TOKEN": "new-token"})
+    assert merged.count("IVR_SESSION_TOKEN=") == 1
+    assert "IVR_SESSION_TOKEN=new-token" in merged
+    # Unrelated keys and the comment survive
+    assert "AWS_REGION=us-east-1" in merged
+    assert "AWS_ACCOUNT_ID=123456789012" in merged
+    assert "# a comment" in merged
+
+
 def test_merge_env_updates_an_existing_key_in_place():
     existing = "AWS_REGION=us-east-1\nTWILIO_PHONE_NUMBER=+1555\n"
     merged = merge_env(existing, {"AWS_REGION": "eu-west-1"})

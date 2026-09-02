@@ -60,3 +60,28 @@ def test_sms_prompt_has_no_transfer_tool_instructions():
 def test_sms_prompt_gives_callers_the_phone_number_to_reach_a_department():
     prompt = build_sms_system_prompt(config_with_two_intents())
     assert "+15550000000" in prompt
+
+
+# --- Additional rule assertions (Finding 4) --------------------------------
+
+
+def test_sms_prompt_does_not_contain_transfer_wording():
+    """SMS prompt must not suggest the agent can transfer — it has no transfer tool."""
+    prompt = build_sms_system_prompt(config_with_two_intents())
+    assert "transfer" not in prompt.lower()
+    assert "Options you can transfer to:" not in prompt
+
+
+def test_sms_prompt_forbids_markdown():
+    prompt = build_sms_system_prompt(config_with_two_intents())
+    assert "markdown" in prompt.lower()
+
+
+def test_voice_prompt_pins_two_attempts_rule():
+    prompt = build_voice_system_prompt(config_with_two_intents())
+    assert "two" in prompt.lower() and "attempt" in prompt.lower()
+
+
+def test_voice_prompt_pins_at_most_one_question_per_turn():
+    prompt = build_voice_system_prompt(config_with_two_intents())
+    assert "one question" in prompt.lower() or "at most one" in prompt.lower()

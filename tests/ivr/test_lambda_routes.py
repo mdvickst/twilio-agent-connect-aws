@@ -12,9 +12,17 @@ from routes import handle_dial, handle_session
 PRESIGNED = "wss://runtime.bedrock-agentcore.us-east-1.amazonaws.com/x?X-Amz-Signature=abc"
 TOKEN = "correct-horse-battery-staple"
 
+#: A well-formed Twilio Call SID: "CA" + 32 lowercase hex characters.
+VALID_CALL_SID = "CA" + "a" * 32
+
 
 def presign(call_sid: str) -> str:
     return f"{PRESIGNED}&session={call_sid}"
+
+
+def presign_must_not_be_called(call_sid: str) -> str:
+    """Use as the presign argument when the route must reject before presigning."""
+    raise AssertionError(f"presign must not be called; was called with {call_sid!r}")
 
 
 def session_event(body: dict[str, Any] | str, *, base64_encoded: bool = False) -> dict[str, Any]:
@@ -62,15 +70,15 @@ DESTINATIONS = {
 
 
 def test_session_returns_the_presigned_websocket_url():
-    event = session_event({"CallSid": "CA123", "Token": TOKEN})
+    event = session_event({"CallSid": VALID_CALL_SID, "Token": TOKEN})
     response = handle_session(event, expected_token=TOKEN, presign=presign)
 
     assert response["statusCode"] == 200
-    assert json.loads(response["body"])["websocket_url"] == presign("CA123")
+    assert json.loads(response["body"])["websocket_url"] == presign(VALID_CALL_SID)
 
 
 def test_session_reads_a_base64_encoded_body():
-    event = session_event({"CallSid": "CA123", "Token": TOKEN}, base64_encoded=True)
+    event = session_event({"CallSid": VALID_CALL_SID, "Token": TOKEN}, base64_encoded=True)
     response = handle_session(event, expected_token=TOKEN, presign=presign)
     assert response["statusCode"] == 200
 
@@ -82,13 +90,13 @@ def test_session_rejects_a_wrong_token():
 
 
 def test_session_rejects_a_missing_token():
-    event = session_event({"CallSid": "CA123"})
+    event = session_event({"CallSid": VALID_CALL_SID})
     response = handle_session(event, expected_token=TOKEN, presign=presign)
     assert response["statusCode"] == 403
 
 
 def test_session_rejects_a_non_post_request():
-    event = session_event({"CallSid": "CA123", "Token": TOKEN})
+    event = session_event({"CallSid": VALID_CALL_SID, "Token": TOKEN})
     event["requestContext"]["http"]["method"] = "GET"
     response = handle_session(event, expected_token=TOKEN, presign=presign)
     assert response["statusCode"] == 405
@@ -124,9 +132,37 @@ def test_session_reports_a_presigning_failure_as_a_server_error():
     def broken_presign(call_sid: str) -> str:
         raise RuntimeError("no credentials")
 
-    event = session_event({"CallSid": "CA123", "Token": TOKEN})
+    event = session_event({"CallSid": VALID_CALL_SID, "Token": TOKEN})
     response = handle_session(event, expected_token=TOKEN, presign=broken_presign)
     assert response["statusCode"] == 500
+
+
+# --- CallSid shape validation (Finding 1) ----------------------------------
+
+
+def test_session_accepts_a_well_formed_call_sid():
+    """CA + 32 hex chars must pass validation and reach presign."""
+    event = session_event({"CallSid": VALID_CALL_SID, "Token": TOKEN})
+    response = handle_session(event, expected_token=TOKEN, presign=presign)
+    assert response["statusCode"] == 200
+
+
+@pytest.mark.parametrize(
+    "bad_sid",
+    [
+        "../../etc/passwd",  # path traversal attempt
+        "short",  # too short, wrong prefix
+        "CA" + "z" * 32,  # right prefix and length but 'z' is not hex
+        "CA" + "a" * 31,  # one hex char too few
+        "CA" + "a" * 33,  # one hex char too many
+        "",  # empty
+    ],
+)
+def test_session_rejects_malformed_call_sid(bad_sid: str):
+    """Malformed CallSid must return 400 and presign must never be called."""
+    event = session_event({"CallSid": bad_sid, "Token": TOKEN})
+    response = handle_session(event, expected_token=TOKEN, presign=presign_must_not_be_called)
+    assert response["statusCode"] == 400
 
 
 # --- /dial ----------------------------------------------------------------

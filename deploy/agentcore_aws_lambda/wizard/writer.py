@@ -41,8 +41,16 @@ def merge_env(existing: str, updates: dict[str, str]) -> str:
 
     Keys already present are rewritten in place so ordering and surrounding
     comments survive. Keys not present are appended.
+
+    If a key being updated appears more than once in the existing file (e.g.
+    after a hand-edit), later duplicate occurrences are dropped so exactly one
+    line for that key survives.  Without this, Make's ``-include .env`` and
+    ``dotenv.config()`` pick *different* occurrences (last vs. first), causing
+    the Studio flow to embed one token and the Lambda to read another — every
+    call gets a 403 with no visible error.
     """
     remaining = dict(updates)
+    written_keys: set[str] = set()
     lines = existing.splitlines()
     merged: list[str] = []
 
@@ -52,6 +60,11 @@ def merge_env(existing: str, updates: dict[str, str]) -> str:
             key = stripped.partition("=")[0].strip()
             if key in remaining:
                 merged.append(f"{key}={remaining.pop(key)}")
+                written_keys.add(key)
+                continue
+            if key in written_keys:
+                # Later duplicate of a key we already rewrote — drop it so
+                # exactly one authoritative line survives.
                 continue
         merged.append(line)
 
