@@ -52,7 +52,7 @@ preflight:
 ifndef TWILIO_API_KEY
 	$(error TWILIO_API_KEY is not set. Run 'make configure' first)
 endif
-	cd $(REPO_ROOT) && PYTHONPATH=deploy/agentcore_aws_lambda \
+	@cd $(REPO_ROOT) && PYTHONPATH=deploy/agentcore_aws_lambda \
 		TWILIO_ACCOUNT_SID="$(TWILIO_ACCOUNT_SID)" \
 		TWILIO_AUTH_TOKEN="$(TWILIO_AUTH_TOKEN)" \
 		TWILIO_API_KEY="$(TWILIO_API_KEY)" \
@@ -64,7 +64,7 @@ capture-rules:
 ifndef TWILIO_API_KEY
 	$(error TWILIO_API_KEY is not set. Run 'make configure' first)
 endif
-	cd $(REPO_ROOT) && PYTHONPATH=deploy/agentcore_aws_lambda \
+	@cd $(REPO_ROOT) && PYTHONPATH=deploy/agentcore_aws_lambda \
 		TWILIO_API_KEY="$(TWILIO_API_KEY)" \
 		TWILIO_API_SECRET="$(TWILIO_API_SECRET)" \
 		uv run python -m studio.capture_rules
@@ -77,7 +77,7 @@ endif
 ifndef IVR_SESSION_TOKEN
 	$(error IVR_SESSION_TOKEN is not set. Run 'make configure' first)
 endif
-	cd $(REPO_ROOT) && PYTHONPATH=deploy/agentcore_aws_lambda \
+	@cd $(REPO_ROOT) && PYTHONPATH=deploy/agentcore_aws_lambda \
 		AWS_PROFILE="$(AWS_PROFILE)" \
 		TWILIO_ACCOUNT_SID="$(TWILIO_ACCOUNT_SID)" \
 		TWILIO_AUTH_TOKEN="$(TWILIO_AUTH_TOKEN)" \
@@ -218,7 +218,7 @@ endif
 	cd cdk && AWS_PROFILE=$(AWS_PROFILE) npx aws-cdk destroy TacLambdaStack TacAgentCoreStack TacSecretsStack --force
 	@echo ""
 	@echo "Cleaning up Studio flow and Twilio phone number webhook..."
-	cd $(REPO_ROOT) && PYTHONPATH=deploy/agentcore_aws_lambda \
+	@cd $(REPO_ROOT) && PYTHONPATH=deploy/agentcore_aws_lambda \
 		TWILIO_ACCOUNT_SID="$(TWILIO_ACCOUNT_SID)" \
 		TWILIO_AUTH_TOKEN="$(TWILIO_AUTH_TOKEN)" \
 		TWILIO_API_KEY="$(TWILIO_API_KEY)" \
