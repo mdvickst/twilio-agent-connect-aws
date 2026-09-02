@@ -34,7 +34,7 @@
         <label>API Secret <input name="apiSecret" type="password" required></label>
       </div>
       <button type="button" id="test-connection">Test connection</button>
-      <p class="error" id="credentials-error" hidden></p>
+      <p class="error" id="credentials-error" hidden role="alert"></p>
       <p class="ok" id="credentials-ok" hidden></p>
     </section>
 
@@ -48,7 +48,7 @@
           <select name="conversationConfigurationId" required></select>
         </label>
       </div>
-      <p class="error" id="resources-error" hidden></p>
+      <p class="error" id="resources-error" hidden role="alert"></p>
     </section>
 
     <section>
@@ -61,7 +61,7 @@
         <textarea name="businessPrompt" rows="6" required maxlength="4000"></textarea>
       </label>
       <p class="counter"><span id="prompt-count">0</span>/4000</p>
-      <p class="error" id="business-error" hidden></p>
+      <p class="error" id="business-error" hidden role="alert"></p>
       <div class="grid">
         <label>Language
           <select name="language">
@@ -97,7 +97,7 @@
                value="Anything that does not match another option, or the caller asks for a person.">
       </label>
       <div id="fallback-destination"></div>
-      <p class="error" id="fallback-error" hidden></p>
+      <p class="error" id="fallback-error" hidden role="alert"></p>
     </section>
 
     <button type="submit" id="save">Save configuration</button>

@@ -23,6 +23,9 @@ function clearErrors() {
     node.textContent = "";
     node.hidden = true;
   });
+  form.querySelectorAll("[aria-invalid]").forEach((el) => {
+    el.removeAttribute("aria-invalid");
+  });
   banner.hidden = true;
 }
 
@@ -114,13 +117,36 @@ function addIntentRow(data) {
   const fragment = document.getElementById("intent-row").content.cloneNode(true);
   const row = fragment.querySelector("li");
   const nameField = row.querySelector('[name="name"]');
+  const descField = row.querySelector('[name="description"]');
   const slugNode = row.querySelector("[data-slug]");
   const editor = makeDestinationEditor();
 
   row.appendChild(editor);
 
+  // Associate row-level error paragraph with both inputs (Finding 2)
+  const rowError = row.querySelector('[data-error="row"]');
+  const rowErrorId = `row-err-${Math.random().toString(36).slice(2)}`;
+  rowError.id = rowErrorId;
+  nameField.setAttribute("aria-describedby", rowErrorId);
+  descField.setAttribute("aria-describedby", rowErrorId);
+
+  // Associate destination error paragraph with the destination fieldset (Finding 2)
+  const destError = editor.querySelector('[data-error="destination"]');
+  const destErrorId = `dest-err-${Math.random().toString(36).slice(2)}`;
+  destError.id = destErrorId;
+  editor.setAttribute("aria-describedby", destErrorId);
+
   nameField.addEventListener("input", () => {
-    slugNode.textContent = slugify(nameField.value) || "—";
+    const slug = slugify(nameField.value);
+    slugNode.textContent = slug || "—";
+    // Finding 5: warn inline when name exists but produces an empty slug
+    if (nameField.value.trim() && !slug) {
+      nameField.setAttribute("aria-invalid", "true");
+      show(rowError, "Name must contain at least one letter or number.");
+    } else if (rowError.textContent === "Name must contain at least one letter or number.") {
+      nameField.removeAttribute("aria-invalid");
+      show(rowError, "");
+    }
   });
 
   row.querySelector(".remove").addEventListener("click", () => {
@@ -248,18 +274,29 @@ function showFieldErrors(errors) {
   const unmapped = [];
 
   errors.forEach((error) => {
-    const path = (error.loc || []).filter(
-      (part) => part !== "body" && part !== "config"
-    );
+    // Finding 4: strip only leading "body" / "config" prefixes, not all occurrences
+    let path = [...(error.loc || [])];
+    if (path[0] === "body") path = path.slice(1);
+    if (path[0] === "config") path = path.slice(1);
     const message = error.msg || "Invalid value";
 
     if (path[0] === "intents" && typeof path[1] === "number") {
       const row = intentList.querySelectorAll("li.intent")[path[1]];
       if (row) {
-        const target = path.includes("destination")
-          ? row.querySelector('[data-error="destination"]')
-          : row.querySelector('[data-error="row"]');
-        show(target, `${path.slice(2).join(".")}: ${message}`);
+        // Finding 2: also set aria-invalid on the relevant inputs
+        if (path.includes("destination")) {
+          const target = row.querySelector('[data-error="destination"]');
+          show(target, `${path.slice(2).join(".")}: ${message}`);
+          const destFieldset = row.querySelector("fieldset.destination");
+          if (destFieldset) destFieldset.setAttribute("aria-invalid", "true");
+        } else {
+          const target = row.querySelector('[data-error="row"]');
+          show(target, `${path.slice(2).join(".")}: ${message}`);
+          const nameInput = row.querySelector('[name="name"]');
+          const descInput = row.querySelector('[name="description"]');
+          if (nameInput) nameInput.setAttribute("aria-invalid", "true");
+          if (descInput) descInput.setAttribute("aria-invalid", "true");
+        }
         return;
       }
     }
@@ -334,21 +371,31 @@ async function testConnection() {
       configSelect.appendChild(option);
     });
 
+    // Finding 3: combine both resource messages rather than letting the second overwrite the first
+    const resourceMessages = [];
     if (!body.phoneNumbers.length) {
-      show(
-        document.getElementById("resources-error"),
+      resourceMessages.push(
         "No voice-capable numbers on this account. Buy one in the Twilio Console first."
       );
     }
     if (!body.conversationConfigurations.length) {
-      show(
-        document.getElementById("resources-error"),
+      resourceMessages.push(
         "No Conversation Orchestrator configurations found. Create one in the Console first."
       );
+    }
+    if (resourceMessages.length) {
+      show(document.getElementById("resources-error"), resourceMessages.join(" "));
     }
 
     document.getElementById("resources-section").classList.remove("disabled");
     show(document.getElementById("credentials-ok"), `Connected to ${body.accountName}.`);
+  } catch (err) {
+    // Finding 1: surface a human message instead of silently resetting the button
+    console.error("testConnection error:", err);
+    show(
+      document.getElementById("credentials-error"),
+      "Could not reach the configuration server. Is it still running?"
+    );
   } finally {
     button.disabled = false;
     button.textContent = "Test connection";
@@ -398,6 +445,10 @@ async function save(event) {
     });
     document.getElementById("done").hidden = false;
     document.getElementById("done").scrollIntoView({ behavior: "smooth" });
+  } catch (err) {
+    // Finding 1: surface a human message instead of silently resetting the button
+    console.error("save error:", err);
+    show(banner, "Could not reach the configuration server. Is it still running?");
   } finally {
     button.disabled = false;
   }

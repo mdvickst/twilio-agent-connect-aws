@@ -146,3 +146,18 @@ def create_app(example_root: Path) -> FastAPI:
         }
 
     return app
+
+
+#: Directory holding ``.env`` and ``ivr-config.json`` — the example root, two
+#: levels up from this module (``wizard/server.py`` -> ``agentcore_aws_lambda/``).
+EXAMPLE_ROOT = Path(__file__).resolve().parent.parent
+
+
+def default_app() -> FastAPI:
+    """Zero-argument factory for ``uvicorn wizard.server:default_app --factory``.
+
+    ``create_app`` takes ``example_root`` so tests can point it at a tmp
+    directory, which means uvicorn cannot call it directly. ``make configure``
+    uses this wrapper instead.
+    """
+    return create_app(EXAMPLE_ROOT)
