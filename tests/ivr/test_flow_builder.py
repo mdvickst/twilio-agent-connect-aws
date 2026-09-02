@@ -145,7 +145,8 @@ def test_relay_widget_includes_configured_voice_settings():
     raw["voice"] = {"language": "en-GB", "ttsProvider": "ElevenLabs"}
     states = states_by_name(build(IVRConfig.model_validate(raw)))
     properties = states["ai_agent"]["properties"]
-    assert properties["language"] == "en-GB"
+    # CR_VOICE_PROPERTY_MAP maps "language" -> "language_code" (UNVERIFIED field name).
+    assert properties["language_code"] == "en-GB"
     assert properties["tts_provider"] == "ElevenLabs"
 
 
@@ -203,7 +204,9 @@ def test_sip_destination_carries_encoded_headers():
     states = states_by_name(build(two_intent_config()))
     dial = states[dial_state_name("sales")]
     assert dial["properties"]["noun"] == "sip"
-    assert dial["properties"]["to"] == "sip:sales@pbx.example.com?X-Dept=sales"
+    # SIP endpoints go in sip_endpoint, not to (see Finding 1).
+    assert dial["properties"]["sip_endpoint"] == "sip:sales@pbx.example.com?X-Dept=sales"
+    assert "to" not in dial["properties"], "sip branch must not set 'to'"
 
 
 def test_sip_destination_passes_through_digest_credentials():

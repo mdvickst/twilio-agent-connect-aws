@@ -57,9 +57,16 @@ def upsert_flow(client: Any, friendly_name: str, definition: dict[str, Any]) -> 
 
 
 def attach_number(client: Any, phone_number_sid: str, webhook_url: str) -> None:
-    """Point the number's voice webhook at the flow."""
+    """Point the number's voice webhook at the flow.
+
+    ``voice_application_sid`` is cleared explicitly because Twilio resolves a
+    TwiML App ahead of ``voice_url``.  A number that previously had a TwiML App
+    would ignore the new webhook URL unless the app SID is removed first.
+    """
     client.incoming_phone_numbers(phone_number_sid).update(
-        voice_url=webhook_url, voice_method="POST"
+        voice_url=webhook_url,
+        voice_method="POST",
+        voice_application_sid="",
     )
 
 
@@ -157,11 +164,27 @@ def main() -> int:
     friendly_name = flow_friendly_name(config)
 
     print("Validating the flow definition...")
-    validation = client.studio.v2.flow_validate.update(
-        friendly_name=friendly_name, status="published", definition=definition
-    )
+    try:
+        validation = client.studio.v2.flow_validate.update(
+            friendly_name=friendly_name, status="published", definition=definition
+        )
+    except TwilioRestException as error:
+        print(
+            f"  Validation request failed: {error.status} {error.msg}\n"
+            "  If the error names an unknown widget type, run "
+            "'python -m studio.discover' to probe the real type string,\n"
+            "  then update CR_WIDGET_TYPE in studio/widgets.py (UNVERIFIED constants).",
+            file=sys.stderr,
+        )
+        return 1
     if not validation.valid:
-        print("  Studio rejected the definition.", file=sys.stderr)
+        print(
+            "  Studio rejected the definition.\n"
+            "  Run 'python -m studio.discover' to probe the ConversationRelay widget "
+            "type string,\n"
+            "  then update CR_WIDGET_TYPE in studio/widgets.py (UNVERIFIED constants).",
+            file=sys.stderr,
+        )
         return 1
     print("  Valid.")
 

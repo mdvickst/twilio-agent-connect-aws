@@ -109,6 +109,9 @@ def test_attach_number_points_the_voice_webhook_at_the_flow():
     assert client.number.updated_with == {
         "voice_url": "https://webhooks.twilio.com/v1/x",
         "voice_method": "POST",
+        # voice_application_sid must be cleared so it does not shadow voice_url
+        # on numbers that previously had a TwiML App attached.
+        "voice_application_sid": "",
     }
 
 

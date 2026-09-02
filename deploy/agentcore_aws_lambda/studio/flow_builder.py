@@ -53,7 +53,12 @@ NO_ANSWER_STATE = "say_no_answer"
 #: Liquid expression exposing the slug the agent sent in its end message.
 HANDOFF_DATA = f"{{{{widgets.{RELAY_STATE}.HandoffData}}}}"
 
-#: Caller ID for outbound legs: the number the caller originally dialed.
+#: Caller ID for outbound legs: ``{{contact.channel.address}}`` is the
+#: *inbound* caller's number (the person calling the IVR), not the IVR number
+#: itself.  This means the transferred destination sees the original caller's
+#: CID — no STIR/SHAKEN attestation on the outbound leg, which some
+#: international or SIP destinations may reject.  Use
+#: ``{{flow.channel.address}}`` instead if you want the IVR number presented.
 CALLER_ID = "{{contact.channel.address}}"
 
 DIAL_TIMEOUT_SECONDS = 30
@@ -205,7 +210,9 @@ def _connect_call_state(
         properties["to"] = destination.number
     elif isinstance(destination, SipDestination):
         properties["noun"] = "sip"
-        properties["to"] = destination.dial_target
+        # SIP endpoints go in sip_endpoint, not to.  The connect-call-to widget
+        # schema accepts to only for number/client nouns; sip uses sip_endpoint.
+        properties["sip_endpoint"] = destination.dial_target
         if destination.username:
             properties["sip_username"] = destination.username
         if destination.password:
@@ -262,7 +269,10 @@ def _twiml_redirect_state(key: str, lambda_url: str, offset: dict[str, int]) -> 
         "transitions": [
             {"event": "return"},
             {"event": "timeout"},
-            {"event": "failed"},
+            # The Twilio docs' prose table says "Failed" but the JSON snippet
+            # in the flow-definition reference uses "fail".  The JSON form was
+            # followed here; "failed" is wrong and causes a 400 on publish.
+            {"event": "fail"},
         ],
         "properties": {
             "url": f"{lambda_url.rstrip('/')}/dial?intent={key}",

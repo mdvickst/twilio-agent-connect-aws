@@ -14,6 +14,17 @@ educated guesses; no probe has been run against a real Twilio account. Run
 string, and build a ConversationRelay widget in the Studio Console and fetch the
 flow definition to confirm the property names. Until then the failure mode is a
 400 from the Flows API when the generated flow is published — loud, not silent.
+
+``CR_WIDGET_TYPE`` is set to ``"run-conversationrelay"`` based on three signals:
+
+1. The documentation URL is ``/studio/widget-library/run-conversationrelay``.
+2. The docs' Liquid example uses the default widget name ``run_crelay_1`` —
+   Studio derives default instance names from the type slug.
+3. Every other action widget in the schema is verb-prefixed and hyphenated
+   (``run-function``, ``make-http-request``, ``add-twiml-redirect``,
+   ``connect-call-to``).
+
+These are still UNVERIFIED — confirm with ``python -m studio.discover``.
 """
 
 from __future__ import annotations
@@ -26,12 +37,15 @@ TWIML_REDIRECT_TYPE = "add-twiml-redirect"
 SAY_PLAY_TYPE = "say-play"
 
 #: UNVERIFIED guess — run studio/discover.py with credentials to confirm.
-CR_WIDGET_TYPE = "conversationrelay"
+#: Set to "run-conversationrelay" based on the doc URL, default instance name,
+#: and the verb-prefixed naming pattern of all other action widgets; see module
+#: docstring for full reasoning.
+CR_WIDGET_TYPE = "run-conversationrelay"
 
 #: Candidates tried by the discovery probe, in order.
 CR_WIDGET_TYPE_CANDIDATES = (
-    "conversationrelay",
     "run-conversationrelay",
+    "conversationrelay",
     "connect-conversationrelay",
     "add-conversationrelay",
     "conversation-relay",
@@ -42,8 +56,11 @@ CR_WIDGET_TYPE_CANDIDATES = (
 CR_URL_PROPERTY = "url"
 
 #: Maps IVRConfig.voice field names to ConversationRelay widget property names.
+#: UNVERIFIED — confirm field names via a Console-built widget fetch.
+#: "language" maps to "language_code" because the widget's documented field is
+#: "Language Code" (not bare "language").
 CR_VOICE_PROPERTY_MAP = {
-    "language": "language",
+    "language": "language_code",
     "tts_provider": "tts_provider",
     "voice": "voice",
     "transcription_provider": "transcription_provider",
