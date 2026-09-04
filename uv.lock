@@ -714,7 +714,7 @@ name = "exceptiongroup"
 version = "1.3.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
+    { name = "typing-extensions" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/50/79/66800aadf48771f6b62f7eb014e352e5d06856655206165d775e675a02c9/exceptiongroup-1.3.1.tar.gz", hash = "sha256:8b412432c6055b0b7d14c310000ae93352ed6754f70fa8f7c34141f91c4e3219", size = 30371, upload-time = "2025-11-21T23:01:54.787Z" }
 wheels = [
@@ -1594,14 +1594,14 @@ wheels = [
 
 [[package]]
 name = "mypy-boto3-bedrock-agent-runtime"
-version = "1.43.0"
+version = "1.43.73"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "typing-extensions", marker = "python_full_version < '3.12'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/3e/29/ccd618a5fe8082904ed8cb39490aa79220b8e856a3ba0786eb19332a3ced/mypy_boto3_bedrock_agent_runtime-1.43.0.tar.gz", hash = "sha256:5a0f329442d3b6a2ea5dc44d2a0f027038351d44033f3fe2e11556363978a210", size = 42042, upload-time = "2026-04-29T22:57:47.626Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/70/b1/283fbbc99cb8f25f039ac489aff0c905d18df76df4c16af31fc3a05d0b5c/mypy_boto3_bedrock_agent_runtime-1.43.73.tar.gz", hash = "sha256:80fcdf1f8540e5e5670212ea2dbf381ba5843e1fb1f062f27b5f2220e88ffaca", size = 46976, upload-time = "2026-08-17T21:16:45.415Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/7d/35/8490203bf6d1b43377548450c8c1e19f5d6d4bc441219fd5355c0c4bee21/mypy_boto3_bedrock_agent_runtime-1.43.0-py3-none-any.whl", hash = "sha256:569ccd99648cbd6b162911601b2b1d8085f4f75090e3a2f07ad9a37b23545a2e", size = 51057, upload-time = "2026-04-29T22:57:45.57Z" },
+    { url = "https://files.pythonhosted.org/packages/f4/6f/f0b6810457951ad9dc6ec01d97265cca34abe771c46936e39cd7aa0c961c/mypy_boto3_bedrock_agent_runtime-1.43.73-py3-none-any.whl", hash = "sha256:abafe2b0c52d267a9f5d7decf9aa3415d9529f6e261a213ae35d69a35bcd8ffd", size = 56503, upload-time = "2026-08-17T21:16:41.692Z" },
 ]
 
 [[package]]
