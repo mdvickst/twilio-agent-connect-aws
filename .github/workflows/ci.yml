@@ -33,7 +33,7 @@ jobs:
           ecosystem: python
 
       - name: Install uv
-        uses: astral-sh/setup-uv@0c5e2b8115b80b4c7c5ddf6ffdd634974642d182 # v5
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v5
         with:
           version: "0.9.26"
 
@@ -81,7 +81,7 @@ jobs:
           ecosystem: python
 
       - name: Install uv
-        uses: astral-sh/setup-uv@0c5e2b8115b80b4c7c5ddf6ffdd634974642d182 # v5
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v5
         with:
           version: "0.9.26"
 
@@ -126,7 +126,7 @@ jobs:
           ecosystem: python
 
       - name: Install uv
-        uses: astral-sh/setup-uv@0c5e2b8115b80b4c7c5ddf6ffdd634974642d182 # v5
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v5
         with:
           version: "0.9.26"
 
@@ -159,7 +159,7 @@ jobs:
           ecosystem: python
 
       - name: Install uv
-        uses: astral-sh/setup-uv@0c5e2b8115b80b4c7c5ddf6ffdd634974642d182 # v5
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v5
         with:
           version: "0.9.26"
 
